@@ -5,11 +5,8 @@ import { useParams } from 'next/navigation'
 import { supabase } from '../../../lib/supabase'
 
 type Tab = 'latest' | 'lifetime' | 'hall'
-
 type HitTier = 'sir' | 'gold' | 'mar' | 'ir' | 'sr' | 'ex'
-
 type RankKey = 'overall' | HitTier
-
 type RankTotals = Record<RankKey, number>
 
 type HallOfFameCollector = {
@@ -37,6 +34,7 @@ const tierLabels: Record<string, string> = {
 }
 
 const hitTiers: HitTier[] = ['sir', 'gold', 'mar', 'ir', 'sr', 'ex']
+const showcaseTiers = ['sir', 'gold', 'mar']
 
 function todayDate() {
   return new Date().toISOString().split('T')[0]
@@ -45,6 +43,16 @@ function todayDate() {
 function dateValue(value: string | null) {
   if (!value) return todayDate()
   return value.split('T')[0]
+}
+
+function formatDate(value: string | null) {
+  if (!value) return 'Unknown date'
+
+  return new Date(value).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  })
 }
 
 function getBreakInfo(name: string | null) {
@@ -83,6 +91,25 @@ function getTierClass(tier: string | null) {
   }
 }
 
+function getTierEmoji(tier: string | null) {
+  switch (tier) {
+    case 'sir':
+      return '👑'
+    case 'gold':
+      return '🥇'
+    case 'mar':
+      return '🌌'
+    case 'ir':
+      return '⭐'
+    case 'sr':
+      return '💎'
+    case 'ex':
+      return '✨'
+    default:
+      return '🎴'
+  }
+}
+
 function getCollectorTitle(rank: number | null) {
   if (!rank) return 'Unranked Collector'
   if (rank === 1) return 'Collectiverse Champion 👑'
@@ -110,13 +137,13 @@ function getEmptyRankTotals(): RankTotals {
 }
 
 function getNextHitMilestone(totalHits: number) {
-  const milestones = [1, 5, 10, 25, 50, 100, 250, 500, 1000]
+  const milestones = [1, 10, 25, 50, 100, 250, 500, 1000]
   const nextTarget = milestones.find((milestone) => milestone > totalHits)
 
   if (!nextTarget) {
     return {
       label: 'Legendary Vault Status',
-      target: totalHits,
+      target: totalHits || 1,
       remaining: 0,
       complete: true,
     }
@@ -130,7 +157,7 @@ function getNextHitMilestone(totalHits: number) {
   }
 }
 
-function getCollectorBadges(counts: RankTotals, rank: number | null): CollectorBadge[] {
+function getPermanentBadges(counts: RankTotals): CollectorBadge[] {
   return [
     { icon: '🎯', label: 'First Hit', unlocked: counts.overall >= 1 },
     { icon: '🔥', label: '10 Hits Club', unlocked: counts.overall >= 10 },
@@ -138,18 +165,26 @@ function getCollectorBadges(counts: RankTotals, rank: number | null): CollectorB
     { icon: '💎', label: '50 Hits Club', unlocked: counts.overall >= 50 },
     { icon: '🚀', label: '100 Hits Club', unlocked: counts.overall >= 100 },
     { icon: '🌌', label: '250 Hits Club', unlocked: counts.overall >= 250 },
+    { icon: '👑', label: '500 Hits Club', unlocked: counts.overall >= 500 },
 
-    { icon: '👑', label: 'SIR Hunter', unlocked: counts.sir >= 2 },
-    { icon: '🌈', label: 'SIR Master', unlocked: counts.sir >= 10 },
+    { icon: '👑', label: 'SIR Hunter', unlocked: counts.sir >= 1 },
+    { icon: '🌈', label: 'SIR Master', unlocked: counts.sir >= 5 },
     { icon: '🥇', label: 'Gold Hunter', unlocked: counts.gold >= 3 },
     { icon: '🏅', label: 'Gold Master', unlocked: counts.gold >= 10 },
     { icon: '🌌', label: 'MAR Hunter', unlocked: counts.mar >= 5 },
-    { icon: '✨', label: 'MAR Master', unlocked: counts.mar >= 20 },
-    { icon: '⭐', label: 'IR Specialist', unlocked: counts.ir >= 20 },
-    { icon: '💫', label: 'SR Specialist', unlocked: counts.sr >= 20},
+    { icon: '✨', label: 'MAR Master', unlocked: counts.mar >= 15 },
+    { icon: '⭐', label: 'IR Specialist', unlocked: counts.ir >= 10 },
+    { icon: '💫', label: 'SR Specialist', unlocked: counts.sr >= 10 },
     { icon: '⚡', label: 'EX Veteran', unlocked: counts.ex >= 25 },
+  ]
+}
 
-    { icon: '🏛️', label: 'Top 10 Collector', unlocked: !!rank && rank <= 10 },
+function getStatusBadges(rank: number | null): CollectorBadge[] {
+  return [
+    { icon: '🏛️', label: 'Top 100 Collector', unlocked: !!rank && rank <= 100 },
+    { icon: '🔥', label: 'Top 50 Collector', unlocked: !!rank && rank <= 50 },
+    { icon: '💎', label: 'Top 25 Collector', unlocked: !!rank && rank <= 25 },
+    { icon: '⭐', label: 'Top 10 Collector', unlocked: !!rank && rank <= 10 },
     { icon: '🥉', label: 'Podium Collector', unlocked: !!rank && rank <= 3 },
     { icon: '👑', label: 'Collectiverse Champion', unlocked: rank === 1 },
   ]
@@ -164,6 +199,7 @@ export default function VaultPage() {
   const [collector, setCollector] = useState<any>(null)
   const [hits, setHits] = useState<any[]>([])
   const [hallOfFame, setHallOfFame] = useState<HallOfFameCollector[]>([])
+  const [bestHitIndex, setBestHitIndex] = useState(0)
   const [message, setMessage] = useState('Loading vault...')
 
   const [ranks, setRanks] = useState<Record<RankKey, number | null>>({
@@ -344,18 +380,41 @@ export default function VaultPage() {
   }
 
   const collectorTitle = getCollectorTitle(ranks.overall)
-  const collectorBadges = getCollectorBadges(counts, ranks.overall)
-  const unlockedBadges = collectorBadges.filter((badge) => badge.unlocked)
-  const lockedBadges = collectorBadges.filter((badge) => !badge.unlocked)
   const nextMilestone = getNextHitMilestone(counts.overall)
+  const permanentBadges = getPermanentBadges(counts)
+  const statusBadges = getStatusBadges(ranks.overall)
 
-  const highestTier =
-    hitTiers.find((tier) => counts[tier] > 0) || null
+  const bestHits = hits
+    .filter((hit) => showcaseTiers.includes(hit.hit_tier))
+    .sort((a, b) => {
+      const order: Record<string, number> = { sir: 1, gold: 2, mar: 3 }
+      const tierSort = order[a.hit_tier] - order[b.hit_tier]
 
-  const strongestTier = hitTiers.reduce<HitTier | null>((bestTier, tier) => {
-    if (!bestTier) return counts[tier] > 0 ? tier : null
-    return counts[tier] > counts[bestTier] ? tier : bestTier
-  }, null)
+      if (tierSort !== 0) return tierSort
+
+      return (
+        new Date(b.revealed_at || b.stream_datetime || 0).getTime() -
+        new Date(a.revealed_at || a.stream_datetime || 0).getTime()
+      )
+    })
+
+  const currentBestHit = bestHits[bestHitIndex] || null
+
+  useEffect(() => {
+    if (bestHits.length <= 1) return
+
+    const timer = window.setInterval(() => {
+      setBestHitIndex((currentIndex) => (currentIndex + 1) % bestHits.length)
+    }, 4000)
+
+    return () => window.clearInterval(timer)
+  }, [bestHits.length])
+
+  useEffect(() => {
+    if (bestHitIndex > bestHits.length - 1) {
+      setBestHitIndex(0)
+    }
+  }, [bestHitIndex, bestHits.length])
 
   const enteredBreakDates = [
     ...new Set(hits.map((hit) => dateValue(hit.stream_datetime))),
@@ -400,6 +459,24 @@ export default function VaultPage() {
       isSelected: selectedDate === date,
     }
   })
+
+  function changeMonth(amount: number) {
+    const nextDate = new Date(year, month + amount, 1)
+    setSelectedDate(dateValue(nextDate.toISOString()))
+  }
+
+  function changeBestHit(amount: number) {
+    if (bestHits.length === 0) return
+
+    setBestHitIndex((currentIndex) => {
+      const nextIndex = currentIndex + amount
+
+      if (nextIndex < 0) return bestHits.length - 1
+      if (nextIndex >= bestHits.length) return 0
+
+      return nextIndex
+    })
+  }
 
   function RankPill({ rank }: { rank: number | null }) {
     return <div className="rank-pill">{rank ? `Rank #${rank}` : 'Unranked'}</div>
@@ -564,11 +641,31 @@ export default function VaultPage() {
           box-shadow: 0 20px 60px rgba(0,0,0,.35), 0 0 30px rgba(168,85,247,.15);
         }
 
+        .calendar-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          margin-bottom: 22px;
+        }
+
         .calendar-month {
           text-align: center;
+          font-size: clamp(1.2rem, 5vw, 1.8rem);
+          font-weight: 950;
+        }
+
+        .calendar-nav {
+          width: 42px;
+          height: 42px;
+          border-radius: 999px;
+          border: 1px solid rgba(255,255,255,.22);
+          background: rgba(255,255,255,.08);
+          color: white;
           font-size: 1.8rem;
           font-weight: 950;
-          margin-bottom: 22px;
+          cursor: pointer;
+          line-height: 1;
         }
 
         .calendar-grid {
@@ -651,6 +748,16 @@ export default function VaultPage() {
           text-align: center;
         }
 
+        .showcase-stat.featured-pulls {
+          grid-column: span 2;
+          position: relative;
+          overflow: hidden;
+          min-height: 160px;
+          background:
+            radial-gradient(circle at top left, rgba(250,204,21,.2), transparent 35%),
+            rgba(255,255,255,.07);
+        }
+
         .showcase-stat-label {
           opacity: .66;
           font-size: .72rem;
@@ -663,6 +770,61 @@ export default function VaultPage() {
         .showcase-stat-value {
           font-size: 1.35rem;
           font-weight: 950;
+        }
+
+        .best-hit-card {
+          margin-top: 10px;
+        }
+
+        .best-hit-tier {
+          display: inline-block;
+          padding: 6px 14px;
+          border-radius: 999px;
+          background: rgba(20,20,80,.45);
+          border: 1px solid rgba(255,255,255,.25);
+          font-size: .78rem;
+          font-weight: 950;
+          margin-bottom: 10px;
+        }
+
+        .best-hit-name {
+          font-size: 1.25rem;
+          font-weight: 950;
+          line-height: 1.1;
+          text-transform: uppercase;
+        }
+
+        .best-hit-meta {
+          margin-top: 8px;
+          opacity: .75;
+          font-size: .82rem;
+          font-weight: 800;
+        }
+
+        .best-hit-controls {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          gap: 12px;
+          margin-top: 14px;
+        }
+
+        .best-hit-button {
+          width: 32px;
+          height: 32px;
+          border-radius: 999px;
+          border: 1px solid rgba(255,255,255,.22);
+          background: rgba(255,255,255,.08);
+          color: white;
+          font-size: 1.2rem;
+          font-weight: 950;
+          cursor: pointer;
+        }
+
+        .best-hit-count {
+          opacity: .7;
+          font-size: .78rem;
+          font-weight: 900;
         }
 
         .milestone-card {
@@ -1354,8 +1516,48 @@ export default function VaultPage() {
         }
 
         @media (max-width: 700px) {
+          .page {
+            padding: 14px;
+          }
+
+          .header h1 {
+            font-size: 2rem;
+          }
+
+          .tabs {
+            gap: 8px;
+          }
+
+          .tab-button {
+            padding: 10px 12px;
+            font-size: .85rem;
+          }
+
+          .break-date-card {
+            padding: 16px;
+            border-radius: 20px;
+          }
+
+          .calendar-grid {
+            gap: 6px;
+          }
+
+          .calendar-day {
+            height: 42px;
+            border-radius: 12px;
+            font-size: .85rem;
+          }
+
+          .calendar-day-label {
+            font-size: .68rem;
+          }
+
           .showcase-grid {
             grid-template-columns: repeat(2, 1fr);
+          }
+
+          .showcase-stat.featured-pulls {
+            grid-column: span 2;
           }
 
           .hof-podium {
@@ -1381,8 +1583,6 @@ export default function VaultPage() {
         }
 
         @media (max-width: 600px) {
-          .page { padding: 16px; }
-
           .hof-row {
             flex-direction: column;
             gap: 8px;
@@ -1390,6 +1590,11 @@ export default function VaultPage() {
 
           .hof-meta {
             justify-content: flex-start;
+          }
+
+          .milestone-row {
+            flex-direction: column;
+            align-items: flex-start;
           }
         }
       `}</style>
@@ -1430,11 +1635,21 @@ export default function VaultPage() {
             <h2 className="section-title">🌌 Break Archive</h2>
 
             <div className="break-date-card">
-              <div className="calendar-month">
-                {new Date(selectedDate).toLocaleString('en-GB', {
-                  month: 'long',
-                  year: 'numeric',
-                })}
+              <div className="calendar-header">
+                <button className="calendar-nav" onClick={() => changeMonth(-1)}>
+                  ‹
+                </button>
+
+                <div className="calendar-month">
+                  {new Date(selectedDate).toLocaleString('en-GB', {
+                    month: 'long',
+                    year: 'numeric',
+                  })}
+                </div>
+
+                <button className="calendar-nav" onClick={() => changeMonth(1)}>
+                  ›
+                </button>
               </div>
 
               <div className="calendar-grid">
@@ -1489,18 +1704,54 @@ export default function VaultPage() {
                   </div>
                 </div>
 
-                <div className="showcase-stat">
-                  <div className="showcase-stat-label">Highest Tier</div>
-                  <div className="showcase-stat-value">
-                    {highestTier ? tierLabels[highestTier] : '-'}
-                  </div>
-                </div>
+                <div className="showcase-stat featured-pulls">
+                  <div className="showcase-stat-label">Best Pulls</div>
 
-                <div className="showcase-stat">
-                  <div className="showcase-stat-label">Top Tier Count</div>
-                  <div className="showcase-stat-value">
-                    {strongestTier ? `${counts[strongestTier]} ${tierLabels[strongestTier]}` : '-'}
-                  </div>
+                  {currentBestHit ? (
+                    <div className="best-hit-card">
+                      <div className="best-hit-tier">
+                        {getTierEmoji(currentBestHit.hit_tier)}{' '}
+                        {tierLabels[currentBestHit.hit_tier]}
+                      </div>
+
+                      <div className="best-hit-name">{currentBestHit.spot_name}</div>
+
+                      <div className="best-hit-meta">
+                        Pulled {formatDate(currentBestHit.revealed_at || currentBestHit.stream_datetime)}
+                      </div>
+
+                      <div className="best-hit-meta">{currentBestHit.break_name}</div>
+
+                      {bestHits.length > 1 && (
+                        <div className="best-hit-controls">
+                          <button
+                            className="best-hit-button"
+                            onClick={() => changeBestHit(-1)}
+                          >
+                            ‹
+                          </button>
+
+                          <div className="best-hit-count">
+                            {bestHitIndex + 1} / {bestHits.length}
+                          </div>
+
+                          <button
+                            className="best-hit-button"
+                            onClick={() => changeBestHit(1)}
+                          >
+                            ›
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="best-hit-card">
+                      <div className="best-hit-name">No MAR+ pulls yet</div>
+                      <div className="best-hit-meta">
+                        Your best hits will appear here automatically.
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -1523,16 +1774,34 @@ export default function VaultPage() {
                 <div
                   className="milestone-fill"
                   style={{
-                    width: `${nextMilestone.complete ? 100 : Math.min(100, (counts.overall / nextMilestone.target) * 100)}%`,
+                    width: `${
+                      nextMilestone.complete
+                        ? 100
+                        : Math.min(100, (counts.overall / nextMilestone.target) * 100)
+                    }%`,
                   }}
                 />
               </div>
             </div>
 
-            <h3 className="subsection-title">Collector Badges</h3>
+            <h3 className="subsection-title">Permanent Achievements</h3>
 
             <div className="badge-grid">
-              {[...unlockedBadges, ...lockedBadges].map((badge) => (
+              {permanentBadges.map((badge) => (
+                <div
+                  key={badge.label}
+                  className={`collector-badge ${badge.unlocked ? '' : 'locked'}`}
+                >
+                  <div className="badge-icon">{badge.icon}</div>
+                  <div className="badge-label">{badge.label}</div>
+                </div>
+              ))}
+            </div>
+
+            <h3 className="subsection-title">Current Status</h3>
+
+            <div className="badge-grid">
+              {statusBadges.map((badge) => (
                 <div
                   key={badge.label}
                   className={`collector-badge ${badge.unlocked ? '' : 'locked'}`}
@@ -1603,11 +1872,6 @@ export default function VaultPage() {
                 <RankPill rank={ranks.ex} />
               </div>
             </div>
-
-            <div className="section-divider" />
-
-            <h3 className="subsection-title">All Recorded Hits</h3>
-            <HitList items={hits} />
           </section>
         )}
 
