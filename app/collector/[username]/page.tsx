@@ -30,7 +30,6 @@ const tierLabels: Record<string, string> = {
   ir: 'IR',
   sr: 'SR',
   ex: 'EX',
-  reverse_holo: 'REVERSE HOLO',
 }
 
 const hitTiers: HitTier[] = ['sir', 'gold', 'mar', 'ir', 'sr', 'ex']
@@ -71,9 +70,7 @@ function getBreakInfo(name: string | null) {
 }
 
 function getTierClass(tier: string | null) {
-  const cleanTier = String(tier || '').toLowerCase().trim()
-
-  switch (cleanTier) {
+  switch (String(tier || '').toLowerCase().trim()) {
     case 'sir':
       return 'hit-sir'
     case 'gold':
@@ -166,7 +163,6 @@ function getPermanentBadges(counts: RankTotals): CollectorBadge[] {
     { icon: '🚀', label: '100 Hits Club', unlocked: counts.overall >= 100 },
     { icon: '🌌', label: '250 Hits Club', unlocked: counts.overall >= 250 },
     { icon: '👑', label: '500 Hits Club', unlocked: counts.overall >= 500 },
-
     { icon: '👑', label: 'SIR Hunter', unlocked: counts.sir >= 1 },
     { icon: '🌈', label: 'SIR Master', unlocked: counts.sir >= 5 },
     { icon: '🥇', label: 'Gold Hunter', unlocked: counts.gold >= 3 },
@@ -461,8 +457,8 @@ export default function VaultPage() {
   })
 
   function changeMonth(amount: number) {
-    const nextDate = new Date(year, month + amount, 1)
-    setSelectedDate(dateValue(nextDate.toISOString()))
+    const nextDate = new Date(year, month + amount, 1, 12)
+    setSelectedDate(nextDate.toISOString().split('T')[0])
   }
 
   function changeBestHit(amount: number) {
@@ -554,38 +550,39 @@ export default function VaultPage() {
           min-height: 100vh;
           background: radial-gradient(circle at top, #15157a 0%, #06063d 45%, #02021f 100%);
           color: white;
-          padding: 24px;
+          padding: 18px;
+          font-size: 0.9rem;
         }
 
         .wrap {
-          max-width: 980px;
+          max-width: 920px;
           margin: 0 auto;
         }
 
         .header {
-          margin-bottom: 28px;
+          margin-bottom: 22px;
         }
 
         .header h1 {
           margin: 0 0 6px;
-          font-size: clamp(2rem, 5vw, 3.2rem);
+          font-size: clamp(1.8rem, 4.4vw, 2.8rem);
           font-weight: 950;
           letter-spacing: -1px;
         }
 
         .header p {
-          opacity: 0.9;
+          opacity: 0.86;
           margin: 0;
-          font-size: 1.05rem;
-          line-height: 1.6;
-          max-width: 700px;
+          font-size: .95rem;
+          line-height: 1.5;
+          max-width: 650px;
           color: rgba(255,255,255,0.85);
         }
 
         .tabs {
           display: flex;
-          gap: 10px;
-          margin-bottom: 28px;
+          gap: 8px;
+          margin-bottom: 22px;
           flex-wrap: wrap;
         }
 
@@ -593,22 +590,23 @@ export default function VaultPage() {
           border: 1px solid rgba(255,255,255,0.16);
           background: rgba(255,255,255,0.07);
           color: white;
-          padding: 12px 16px;
+          padding: 10px 14px;
           border-radius: 999px;
           cursor: pointer;
-          font-weight: 800;
+          font-weight: 850;
+          font-size: .88rem;
         }
 
         .tab-button.active {
           background: linear-gradient(135deg, #7c3aed, #c084fc);
-          box-shadow: 0 12px 30px rgba(124,58,237,0.35);
+          box-shadow: 0 10px 24px rgba(124,58,237,0.35);
         }
 
         .section-title {
-          font-size: 1.8rem;
-          font-weight: 900;
+          font-size: 1.55rem;
+          font-weight: 950;
           letter-spacing: 1px;
-          margin-bottom: 18px;
+          margin-bottom: 16px;
           text-transform: uppercase;
           background: linear-gradient(90deg, #ffffff, #d8b4fe);
           -webkit-background-clip: text;
@@ -616,86 +614,91 @@ export default function VaultPage() {
         }
 
         .subsection-title {
-          font-size: 1.15rem;
-          font-weight: 800;
+          font-size: 1rem;
+          font-weight: 850;
           letter-spacing: 0.5px;
-          margin: 26px 0 16px;
+          margin: 22px 0 14px;
           color: rgba(255,255,255,.92);
         }
 
         .section-divider {
           width: 100%;
           height: 1px;
-          margin: 22px 0;
+          margin: 18px 0;
           background: linear-gradient(90deg, transparent, rgba(255,255,255,.2), transparent);
         }
 
         .break-date-card {
-          max-width: 700px;
-          margin: 0 auto 30px;
-          padding: 28px;
+          max-width: 640px;
+          margin: 0 auto 24px;
+          padding: 22px;
           text-align: center;
-          border-radius: 24px;
+          border-radius: 22px;
           background: linear-gradient(135deg, rgba(124,58,237,.15), rgba(255,255,255,.04));
           border: 1px solid rgba(255,255,255,.12);
-          box-shadow: 0 20px 60px rgba(0,0,0,.35), 0 0 30px rgba(168,85,247,.15);
+          box-shadow: 0 18px 48px rgba(0,0,0,.32), 0 0 24px rgba(168,85,247,.12);
         }
 
         .calendar-header {
-          display: flex;
+          display: grid;
+          grid-template-columns: 40px 1fr 40px;
           align-items: center;
-          justify-content: space-between;
-          gap: 12px;
-          margin-bottom: 22px;
+          gap: 10px;
+          margin-bottom: 18px;
         }
 
         .calendar-month {
           text-align: center;
-          font-size: clamp(1.2rem, 5vw, 1.8rem);
+          font-size: clamp(1.15rem, 4.4vw, 1.55rem);
           font-weight: 950;
         }
 
         .calendar-nav {
-          width: 42px;
-          height: 42px;
+          width: 40px;
+          height: 40px;
           border-radius: 999px;
           border: 1px solid rgba(255,255,255,.22);
           background: rgba(255,255,255,.08);
           color: white;
-          font-size: 1.8rem;
+          font-size: 1.55rem;
           font-weight: 950;
           cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
           line-height: 1;
+          padding: 0 0 3px;
         }
 
         .calendar-grid {
           display: grid;
           grid-template-columns: repeat(7, 1fr);
-          gap: 10px;
+          gap: 8px;
         }
 
         .calendar-day-label {
           text-align: center;
           opacity: 0.65;
-          font-size: 0.8rem;
+          font-size: 0.72rem;
           font-weight: 900;
           text-transform: uppercase;
         }
 
         .calendar-day {
-          height: 52px;
-          border-radius: 16px;
+          height: 44px;
+          border-radius: 14px;
           border: 1px solid rgba(255,255,255,.08);
           background: rgba(255,255,255,.05);
           color: white;
           font-weight: 950;
           cursor: pointer;
+          font-size: .9rem;
         }
 
         .calendar-day.has-break {
           border: 1px solid rgba(250,204,21,.8);
           background: rgba(250,204,21,.16);
-          box-shadow: 0 0 18px rgba(250,204,21,.28);
+          box-shadow: 0 0 14px rgba(250,204,21,.24);
         }
 
         .calendar-day.selected {
@@ -708,140 +711,219 @@ export default function VaultPage() {
           overflow: hidden;
           border: 1px solid rgba(255,255,255,.18);
           background:
-            radial-gradient(circle at top left, rgba(250,204,21,.2), transparent 30%),
-            radial-gradient(circle at bottom right, rgba(56,189,248,.18), transparent 30%),
-            linear-gradient(135deg, rgba(124,58,237,.28), rgba(255,255,255,.06));
-          border-radius: 28px;
-          padding: 26px;
-          margin-bottom: 24px;
-          box-shadow: 0 22px 70px rgba(0,0,0,.36), 0 0 34px rgba(168,85,247,.18);
+            radial-gradient(circle at top left, rgba(250,204,21,.16), transparent 30%),
+            radial-gradient(circle at bottom right, rgba(56,189,248,.16), transparent 32%),
+            linear-gradient(135deg, rgba(124,58,237,.24), rgba(255,255,255,.05));
+          border-radius: 24px;
+          padding: 18px;
+          margin-bottom: 22px;
+          box-shadow: 0 18px 56px rgba(0,0,0,.34), 0 0 28px rgba(168,85,247,.14);
+        }
+
+        .showcase-header {
+          display: grid;
+          grid-template-columns: 1fr 180px;
+          gap: 12px;
+          align-items: stretch;
+          margin-bottom: 14px;
         }
 
         .showcase-topline {
           opacity: .78;
-          font-size: .82rem;
-          font-weight: 950;
-          text-transform: uppercase;
-          letter-spacing: 1.5px;
-          margin-bottom: 8px;
-        }
-
-        .showcase-title {
-          font-size: clamp(1.6rem, 4vw, 2.5rem);
-          font-weight: 950;
-          line-height: 1.05;
-          margin-bottom: 14px;
-        }
-
-        .showcase-grid {
-          display: grid;
-          grid-template-columns: repeat(4, 1fr);
-          gap: 12px;
-          margin-top: 18px;
-        }
-
-        .showcase-stat {
-          border: 1px solid rgba(255,255,255,.14);
-          background: rgba(255,255,255,.07);
-          border-radius: 18px;
-          padding: 14px;
-          text-align: center;
-        }
-
-        .showcase-stat.featured-pulls {
-          grid-column: span 2;
-          position: relative;
-          overflow: hidden;
-          min-height: 160px;
-          background:
-            radial-gradient(circle at top left, rgba(250,204,21,.2), transparent 35%),
-            rgba(255,255,255,.07);
-        }
-
-        .showcase-stat-label {
-          opacity: .66;
           font-size: .72rem;
           font-weight: 950;
           text-transform: uppercase;
+          letter-spacing: 1.5px;
+          margin-bottom: 7px;
+        }
+
+        .showcase-title {
+          font-size: clamp(1.55rem, 4.4vw, 2.55rem);
+          font-weight: 950;
+          line-height: 1;
+        }
+
+        .showcase-rank-card {
+          border: 1px solid rgba(255,255,255,.16);
+          background: rgba(255,255,255,.07);
+          border-radius: 18px;
+          padding: 13px;
+          text-align: center;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+        }
+
+        .showcase-rank-value {
+          font-size: 1.7rem;
+          font-weight: 950;
+          line-height: 1;
+        }
+
+        .showcase-best-pull {
+          text-align: center;
+        }
+
+        .showcase-hit-card,
+        .hit-card {
+          position: relative;
+          isolation: isolate;
+          overflow: hidden;
+          border-radius: 22px;
+          padding: 18px;
+          min-height: 150px;
+          border: 1px solid rgba(255,255,255,0.16);
+          background: rgba(255,255,255,0.07);
+          box-shadow: 0 18px 56px rgba(0,0,0,0.30);
+        }
+
+        .showcase-hit-card {
+          min-height: 210px;
+          margin-top: 8px;
+        }
+
+        .showcase-hit-card::before,
+        .hit-card::before {
+          content: '';
+          position: absolute;
+          inset: -3px;
+          z-index: -2;
+          opacity: 0.9;
+        }
+
+        .showcase-hit-card::after,
+        .hit-card::after {
+          content: '';
+          position: absolute;
+          top: -10%;
+          left: -85%;
+          width: 65%;
+          height: 120%;
+          transform: skewX(-18deg);
+          z-index: -1;
+          opacity: 0.42;
+        }
+
+        .hit-content {
+          position: relative;
+          z-index: 2;
+          text-align: center;
+        }
+
+        .hit-break {
+          opacity: 0.9;
+          font-size: 1rem;
+          margin-bottom: 9px;
+          font-weight: 950;
+          text-transform: uppercase;
           letter-spacing: 1px;
-          margin-bottom: 6px;
         }
 
-        .showcase-stat-value {
-          font-size: 1.35rem;
-          font-weight: 950;
-        }
-
-        .best-hit-card {
-          margin-top: 10px;
-        }
-
-        .best-hit-tier {
+        .break-number {
           display: inline-block;
-          padding: 6px 14px;
-          border-radius: 999px;
-          background: rgba(20,20,80,.45);
-          border: 1px solid rgba(255,255,255,.25);
-          font-size: .78rem;
+          margin-bottom: 14px;
+          padding: 8px 20px;
+          border-radius: 11px;
+          background: rgba(20,20,80,0.45);
+          border: 2px solid rgba(255,255,255,0.75);
+          color: white;
+          font-size: 1rem;
           font-weight: 950;
-          margin-bottom: 10px;
+          letter-spacing: 1px;
+          box-shadow: 0 0 16px rgba(255,255,255,0.16);
         }
 
-        .best-hit-name {
-          font-size: 1.25rem;
+        .hit-card h3,
+        .showcase-hit-card h3 {
+          text-align: center;
+          margin: 0;
+          font-size: clamp(1.35rem, 3.5vw, 2.05rem);
+          line-height: 1.05;
+          text-transform: uppercase;
           font-weight: 950;
-          line-height: 1.1;
+          text-shadow: 0 7px 24px rgba(0,0,0,0.45);
+        }
+
+        .showcase-hit-card h3 {
+          margin-top: 14px;
+        }
+
+        .showcase-hit-date {
+          margin-top: 12px;
+          opacity: .85;
+          font-size: .9rem;
+          font-weight: 900;
+        }
+
+        .showcase-hit-break {
+          margin-top: 8px;
+          opacity: .8;
+          font-size: .86rem;
+          font-weight: 950;
           text-transform: uppercase;
         }
 
-        .best-hit-meta {
-          margin-top: 8px;
-          opacity: .75;
-          font-size: .82rem;
-          font-weight: 800;
+        .hit-badge {
+          display: inline-block;
+          margin-top: 14px;
+          padding: 10px 28px;
+          border-radius: 999px;
+          color: #050505;
+          font-weight: 950;
+          letter-spacing: 1.5px;
+          font-size: .98rem;
+          box-shadow: 0 8px 26px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.65);
+        }
+
+        .showcase-hit-card .hit-badge {
+          margin-top: 0;
         }
 
         .best-hit-controls {
           display: flex;
           justify-content: center;
           align-items: center;
-          gap: 12px;
+          gap: 10px;
           margin-top: 14px;
         }
 
         .best-hit-button {
-          width: 32px;
-          height: 32px;
+          width: 30px;
+          height: 30px;
           border-radius: 999px;
           border: 1px solid rgba(255,255,255,.22);
           background: rgba(255,255,255,.08);
           color: white;
-          font-size: 1.2rem;
+          font-size: 1.1rem;
           font-weight: 950;
           cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0 0 2px;
         }
 
         .best-hit-count {
           opacity: .7;
-          font-size: .78rem;
+          font-size: .76rem;
           font-weight: 900;
         }
 
         .milestone-card {
           border: 1px solid rgba(255,255,255,.16);
           background: rgba(255,255,255,.06);
-          border-radius: 22px;
-          padding: 18px;
-          margin-bottom: 24px;
-          box-shadow: 0 16px 46px rgba(0,0,0,.24);
+          border-radius: 20px;
+          padding: 16px;
+          margin-bottom: 22px;
+          box-shadow: 0 14px 38px rgba(0,0,0,.22);
         }
 
         .milestone-row {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          gap: 18px;
-          margin-bottom: 12px;
+          gap: 16px;
+          margin-bottom: 11px;
         }
 
         .milestone-label {
@@ -856,7 +938,7 @@ export default function VaultPage() {
 
         .milestone-bar {
           overflow: hidden;
-          height: 12px;
+          height: 10px;
           border-radius: 999px;
           background: rgba(255,255,255,.12);
           border: 1px solid rgba(255,255,255,.1);
@@ -866,54 +948,63 @@ export default function VaultPage() {
           height: 100%;
           border-radius: 999px;
           background: linear-gradient(90deg, #7c3aed, #c084fc, #facc15);
-          box-shadow: 0 0 18px rgba(192,132,252,.45);
+          box-shadow: 0 0 16px rgba(192,132,252,.45);
+        }
+
+        .showcase-stat-label {
+          opacity: .66;
+          font-size: .68rem;
+          font-weight: 950;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          margin-bottom: 6px;
         }
 
         .badge-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
-          gap: 10px;
-          margin-bottom: 28px;
+          grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+          gap: 9px;
+          margin-bottom: 24px;
         }
 
         .collector-badge {
           border: 1px solid rgba(255,255,255,.16);
           background: rgba(255,255,255,.07);
-          border-radius: 18px;
-          padding: 14px;
+          border-radius: 16px;
+          padding: 12px;
           text-align: center;
           font-weight: 900;
-          box-shadow: 0 14px 40px rgba(0,0,0,.22);
+          box-shadow: 0 12px 34px rgba(0,0,0,.20);
         }
 
         .collector-badge.locked {
-          opacity: .38;
+          opacity: .35;
           filter: grayscale(1);
         }
 
         .badge-icon {
-          font-size: 1.5rem;
-          margin-bottom: 6px;
+          font-size: 1.3rem;
+          margin-bottom: 5px;
         }
 
         .badge-label {
-          font-size: .82rem;
+          font-size: .76rem;
         }
 
         .stats-grid {
           display: flex;
           flex-direction: column;
-          gap: 10px;
-          margin-bottom: 28px;
+          gap: 9px;
+          margin-bottom: 24px;
         }
 
         .stat-box {
           position: relative;
           isolation: isolate;
           overflow: hidden;
-          min-height: 82px;
-          border-radius: 20px;
-          padding: 12px 16px;
+          min-height: 72px;
+          border-radius: 18px;
+          padding: 10px 14px;
           display: flex;
           flex-direction: column;
           justify-content: center;
@@ -949,30 +1040,30 @@ export default function VaultPage() {
         }
 
         .stat-number {
-          font-size: 1.7rem;
+          font-size: 1.45rem;
           font-weight: 950;
           line-height: 1;
         }
 
         .rank-pill {
           display: inline-block;
-          margin-top: 10px;
-          padding: 7px 16px;
+          margin-top: 8px;
+          padding: 6px 14px;
           border-radius: 999px;
           background: rgba(20,20,80,0.45);
           border: 1px solid rgba(255,255,255,0.65);
           color: white;
-          font-size: 0.78rem;
+          font-size: 0.7rem;
           font-weight: 950;
           letter-spacing: 0.8px;
           text-transform: uppercase;
-          box-shadow: 0 0 18px rgba(255,255,255,0.14);
+          box-shadow: 0 0 16px rgba(255,255,255,0.12);
         }
 
         .stat-total {
           border: 2px solid rgba(255,255,255,.35);
           background: linear-gradient(135deg, rgba(124,58,237,.2), rgba(255,255,255,.07));
-          box-shadow: 0 0 30px rgba(168,85,247,.2);
+          box-shadow: 0 0 24px rgba(168,85,247,.2);
         }
 
         .hof-hero {
@@ -982,36 +1073,36 @@ export default function VaultPage() {
           background:
             radial-gradient(circle at top left, rgba(250,204,21,.24), transparent 30%),
             linear-gradient(135deg, rgba(124,58,237,.28), rgba(255,255,255,.06));
-          border-radius: 28px;
-          padding: 28px;
-          margin-bottom: 28px;
+          border-radius: 24px;
+          padding: 24px;
+          margin-bottom: 24px;
           text-align: center;
-          box-shadow: 0 22px 70px rgba(0,0,0,.36), 0 0 34px rgba(168,85,247,.18);
+          box-shadow: 0 18px 56px rgba(0,0,0,.34), 0 0 28px rgba(168,85,247,.16);
         }
 
         .hof-hero-label {
           opacity: .78;
-          font-size: .85rem;
+          font-size: .75rem;
           font-weight: 950;
           text-transform: uppercase;
           letter-spacing: 1.5px;
-          margin-bottom: 10px;
+          margin-bottom: 9px;
         }
 
         .hof-hero-rank {
           display: inline-block;
-          padding: 12px 34px;
+          padding: 10px 28px;
           border-radius: 999px;
           background: rgba(20,20,80,.48);
           border: 2px solid rgba(255,255,255,.7);
-          font-size: 2rem;
+          font-size: 1.75rem;
           font-weight: 950;
-          box-shadow: 0 0 24px rgba(255,255,255,.18);
+          box-shadow: 0 0 22px rgba(255,255,255,.16);
         }
 
         .hof-title {
-          margin-top: 12px;
-          font-size: 1rem;
+          margin-top: 10px;
+          font-size: .92rem;
           font-weight: 950;
           opacity: .9;
           letter-spacing: .4px;
@@ -1020,77 +1111,77 @@ export default function VaultPage() {
         .hof-podium {
           display: grid;
           grid-template-columns: 1fr 1.2fr 1fr;
-          gap: 14px;
+          gap: 12px;
           align-items: start;
-          margin-bottom: 44px;
+          margin-bottom: 36px;
         }
 
         .podium-card {
           position: relative;
           overflow: hidden;
-          border-radius: 24px;
-          padding: 22px 14px;
+          border-radius: 22px;
+          padding: 18px 12px;
           text-align: center;
           border: 1px solid rgba(255,255,255,.18);
           background: rgba(255,255,255,.07);
-          box-shadow: 0 18px 55px rgba(0,0,0,.3);
+          box-shadow: 0 16px 44px rgba(0,0,0,.28);
         }
 
         .podium-1 {
-          min-height: 260px;
+          min-height: 230px;
           border-color: rgba(250,204,21,.85);
           background: linear-gradient(135deg, rgba(250,204,21,.22), rgba(168,85,247,.16));
-          box-shadow: 0 0 34px rgba(250,204,21,.3), 0 18px 55px rgba(0,0,0,.35);
+          box-shadow: 0 0 28px rgba(250,204,21,.28), 0 16px 44px rgba(0,0,0,.32);
         }
 
         .podium-2 {
-          min-height: 220px;
+          min-height: 200px;
           border-color: rgba(226,232,240,.75);
           background: linear-gradient(135deg, rgba(226,232,240,.18), rgba(96,165,250,.1));
         }
 
         .podium-3 {
-          min-height: 200px;
+          min-height: 185px;
           border-color: rgba(251,146,60,.75);
           background: linear-gradient(135deg, rgba(251,146,60,.18), rgba(168,85,247,.1));
         }
 
         .podium-medal {
-          font-size: 2rem;
-          margin-bottom: 8px;
+          font-size: 1.75rem;
+          margin-bottom: 7px;
         }
 
         .podium-rank {
-          font-size: .85rem;
+          font-size: .76rem;
           font-weight: 950;
           opacity: .7;
-          margin-bottom: 6px;
+          margin-bottom: 5px;
         }
 
         .podium-name {
-          font-size: 1.1rem;
+          font-size: .98rem;
           font-weight: 950;
           word-break: break-word;
         }
 
         .podium-title {
-          margin-top: 10px;
+          margin-top: 8px;
           opacity: .9;
-          font-size: .85rem;
+          font-size: .76rem;
           font-weight: 900;
         }
 
         .podium-stat-label {
-          margin-top: 14px;
+          margin-top: 12px;
           opacity: .6;
-          font-size: .7rem;
+          font-size: .64rem;
           font-weight: 900;
           letter-spacing: 1.5px;
           text-transform: uppercase;
         }
 
         .podium-stat {
-          font-size: 2rem;
+          font-size: 1.7rem;
           font-weight: 950;
           line-height: 1;
           margin-top: 4px;
@@ -1099,17 +1190,17 @@ export default function VaultPage() {
         .hof-list {
           display: flex;
           flex-direction: column;
-          gap: 10px;
+          gap: 9px;
         }
 
         .hof-row {
           display: flex;
           justify-content: space-between;
-          gap: 16px;
+          gap: 14px;
           border: 1px solid rgba(255,255,255,.14);
           background: rgba(255,255,255,.06);
-          border-radius: 18px;
-          padding: 14px 16px;
+          border-radius: 16px;
+          padding: 12px 14px;
           font-weight: 900;
         }
 
@@ -1120,17 +1211,17 @@ export default function VaultPage() {
         .hof-meta {
           display: flex;
           align-items: center;
-          gap: 10px;
+          gap: 8px;
           flex-wrap: wrap;
           justify-content: flex-end;
         }
 
         .hof-tier-name {
-          padding: 5px 10px;
+          padding: 4px 9px;
           border-radius: 999px;
           background: rgba(20,20,80,.45);
           border: 1px solid rgba(255,255,255,.24);
-          font-size: .72rem;
+          font-size: .66rem;
           font-weight: 950;
           opacity: .9;
         }
@@ -1143,111 +1234,28 @@ export default function VaultPage() {
         .hit-grid {
           display: flex;
           flex-direction: column;
-          gap: 18px;
-        }
-
-        .hit-card {
-          position: relative;
-          isolation: isolate;
-          overflow: hidden;
-          border-radius: 24px;
-          padding: 20px;
-          min-height: 170px;
-          border: 1px solid rgba(255,255,255,0.16);
-          background: rgba(255,255,255,0.07);
-          box-shadow: 0 20px 70px rgba(0,0,0,0.32);
-        }
-
-        .hit-card::before {
-          content: '';
-          position: absolute;
-          inset: -3px;
-          z-index: -2;
-          opacity: 0.9;
-        }
-
-        .hit-card::after {
-          content: '';
-          position: absolute;
-          top: -10%;
-          left: -85%;
-          width: 65%;
-          height: 120%;
-          transform: skewX(-18deg);
-          z-index: -1;
-          opacity: 0.42;
-        }
-
-        .hit-content {
-          position: relative;
-          z-index: 2;
-          text-align: center;
-        }
-
-        .hit-break {
-          opacity: 0.9;
-          font-size: 1.15rem;
-          margin-bottom: 10px;
-          font-weight: 950;
-          text-transform: uppercase;
-          letter-spacing: 1px;
-        }
-
-        .break-number {
-          display: inline-block;
-          margin-bottom: 18px;
-          padding: 10px 26px;
-          border-radius: 12px;
-          background: rgba(20,20,80,0.45);
-          border: 2px solid rgba(255,255,255,0.75);
-          color: white;
-          font-size: 1.2rem;
-          font-weight: 950;
-          letter-spacing: 1px;
-          box-shadow: 0 0 20px rgba(255,255,255,0.18);
-        }
-
-        .hit-card h3 {
-          text-align: center;
-          margin: 0;
-          font-size: clamp(1.6rem, 4vw, 2.4rem);
-          line-height: 1.05;
-          text-transform: uppercase;
-          font-weight: 950;
-          text-shadow: 0 8px 28px rgba(0,0,0,0.45);
-        }
-
-        .hit-badge {
-          display: inline-block;
-          margin-top: 18px;
-          padding: 12px 34px;
-          border-radius: 999px;
-          color: #050505;
-          font-weight: 950;
-          letter-spacing: 2px;
-          font-size: 1.1rem;
-          box-shadow: 0 8px 30px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.65);
+          gap: 14px;
         }
 
         .badge-gold {
           background: linear-gradient(135deg, #fff7ad, #facc15, #b45309);
           color: #1f1300;
           border: 1px solid rgba(255,255,255,.65);
-          box-shadow: 0 0 24px rgba(250,204,21,.85), inset 0 1px 0 rgba(255,255,255,.75);
+          box-shadow: 0 0 22px rgba(250,204,21,.8), inset 0 1px 0 rgba(255,255,255,.75);
         }
 
         .badge-sir {
           background: linear-gradient(135deg, #ff004c, #ffb000, #fff700, #00f0ff, #8b5cf6);
           color: #160018;
           border: 1px solid rgba(255,255,255,.65);
-          box-shadow: 0 0 26px rgba(255,176,0,.8), 0 0 45px rgba(168,85,247,.45);
+          box-shadow: 0 0 24px rgba(255,176,0,.75), 0 0 38px rgba(168,85,247,.4);
         }
 
         .badge-mar {
           background: linear-gradient(135deg, #e0f2fe, #38bdf8, #8b5cf6);
           color: #02111f;
           border: 1px solid rgba(255,255,255,.55);
-          box-shadow: 0 0 22px rgba(56,189,248,.75), inset 0 1px 0 rgba(255,255,255,.75);
+          box-shadow: 0 0 20px rgba(56,189,248,.7), inset 0 1px 0 rgba(255,255,255,.75);
         }
 
         .badge-ir {
@@ -1267,7 +1275,7 @@ export default function VaultPage() {
 
         .hit-ex {
           border: 1px solid rgba(96,165,250,.5);
-          box-shadow: 0 0 26px rgba(96,165,250,.38), 0 0 52px rgba(96,165,250,.16);
+          box-shadow: 0 0 24px rgba(96,165,250,.34), 0 0 46px rgba(96,165,250,.14);
           animation: exPulse 2.8s ease-in-out infinite;
         }
 
@@ -1282,7 +1290,7 @@ export default function VaultPage() {
 
         .hit-sr {
           border: 1px solid rgba(192,132,252,.55);
-          box-shadow: 0 0 32px rgba(192,132,252,.42), 0 0 70px rgba(168,85,247,.2);
+          box-shadow: 0 0 28px rgba(192,132,252,.38), 0 0 58px rgba(168,85,247,.18);
           animation: srPulse 2.5s ease-in-out infinite;
         }
 
@@ -1297,7 +1305,7 @@ export default function VaultPage() {
 
         .hit-ir {
           border: 1px solid rgba(251,113,133,.68);
-          box-shadow: 0 0 36px rgba(251,113,133,.48), 0 0 75px rgba(244,63,94,.24), inset 0 0 30px rgba(251,113,133,.08);
+          box-shadow: 0 0 32px rgba(251,113,133,.43), 0 0 64px rgba(244,63,94,.20), inset 0 0 26px rgba(251,113,133,.08);
           animation: irOrbit 2.8s ease-in-out infinite;
         }
 
@@ -1313,7 +1321,7 @@ export default function VaultPage() {
         .hit-mar {
           border: 2px solid rgba(56,189,248,.78);
           background: radial-gradient(circle at 18% 28%, rgba(255,255,255,.18), transparent 24%), radial-gradient(circle at 82% 72%, rgba(56,189,248,.16), transparent 28%), rgba(255,255,255,.08);
-          box-shadow: 0 0 42px rgba(56,189,248,.52), 0 0 90px rgba(14,165,233,.27), inset 0 0 42px rgba(56,189,248,.12);
+          box-shadow: 0 0 36px rgba(56,189,248,.46), 0 0 74px rgba(14,165,233,.22), inset 0 0 34px rgba(56,189,248,.10);
           animation: marCosmicFloat 2.4s ease-in-out infinite;
         }
 
@@ -1330,7 +1338,7 @@ export default function VaultPage() {
         .hit-gold {
           border: 2px solid rgba(250,204,21,.86);
           background: radial-gradient(circle at top left, rgba(255,255,255,.14), transparent 30%), linear-gradient(135deg, rgba(250,204,21,.16), rgba(168,85,247,.14), rgba(255,255,255,.06));
-          box-shadow: 0 0 38px rgba(250,204,21,.42), 0 0 82px rgba(168,85,247,.25), inset 0 0 38px rgba(250,204,21,.12);
+          box-shadow: 0 0 34px rgba(250,204,21,.38), 0 0 70px rgba(168,85,247,.22), inset 0 0 32px rgba(250,204,21,.10);
           animation: goldPremiumFloat 2.2s ease-in-out infinite;
         }
 
@@ -1346,7 +1354,7 @@ export default function VaultPage() {
         .hit-sir {
           border: 2px solid rgba(255,255,255,.42);
           background: radial-gradient(circle at top left, rgba(255,255,255,.18), transparent 28%), linear-gradient(135deg, rgba(255,0,76,.15), rgba(255,176,0,.12), rgba(0,240,255,.1), rgba(139,92,246,.16));
-          box-shadow: 0 0 35px rgba(255,176,0,.42), 0 0 70px rgba(168,85,247,.3), 0 0 100px rgba(34,211,238,.2), inset 0 0 44px rgba(255,255,255,.08);
+          box-shadow: 0 0 32px rgba(255,176,0,.38), 0 0 62px rgba(168,85,247,.26), 0 0 84px rgba(34,211,238,.18), inset 0 0 36px rgba(255,255,255,.07);
           animation: sirLegendaryFloat 1.8s ease-in-out infinite;
         }
 
@@ -1384,7 +1392,7 @@ export default function VaultPage() {
 
         .planet-field span {
           position: absolute;
-          font-size: 1.25rem;
+          font-size: 1.1rem;
           filter: drop-shadow(0 0 12px rgba(250,204,21,.75));
           opacity: .82;
         }
@@ -1403,7 +1411,7 @@ export default function VaultPage() {
 
         .rocket-field span {
           position: absolute;
-          font-size: 1.35rem;
+          font-size: 1.15rem;
           filter: drop-shadow(0 0 12px rgba(255,255,255,.75));
         }
 
@@ -1448,22 +1456,22 @@ export default function VaultPage() {
 
         @keyframes exPulse {
           0%, 100% { transform: scale(1); filter: brightness(1); }
-          50% { transform: scale(1.005); filter: brightness(1.15); }
+          50% { transform: scale(1.004); filter: brightness(1.12); }
         }
 
         @keyframes srPulse {
           0%, 100% { transform: scale(1); filter: saturate(1); }
-          50% { transform: scale(1.008); filter: saturate(1.35); }
+          50% { transform: scale(1.006); filter: saturate(1.3); }
         }
 
         @keyframes irOrbit {
           0%, 100% { transform: translateY(0) scale(1); filter: brightness(1); }
-          50% { transform: translateY(-2px) scale(1.01); filter: brightness(1.15); }
+          50% { transform: translateY(-2px) scale(1.008); filter: brightness(1.12); }
         }
 
         @keyframes marCosmicFloat {
           0%, 100% { transform: translateY(0) scale(1); filter: brightness(1) saturate(1.05); }
-          50% { transform: translateY(-3px) scale(1.014); filter: brightness(1.2) saturate(1.25); }
+          50% { transform: translateY(-3px) scale(1.012); filter: brightness(1.17) saturate(1.2); }
         }
 
         @keyframes starTwinkle {
@@ -1473,12 +1481,12 @@ export default function VaultPage() {
 
         @keyframes goldPremiumFloat {
           0%, 100% { transform: translateY(0) scale(1); filter: brightness(1) saturate(1.05); }
-          50% { transform: translateY(-4px) scale(1.016); filter: brightness(1.28) saturate(1.3); }
+          50% { transform: translateY(-3px) scale(1.012); filter: brightness(1.22) saturate(1.24); }
         }
 
         @keyframes sirLegendaryFloat {
           0%, 100% { transform: translateY(0) scale(1); filter: brightness(1) saturate(1.12); }
-          50% { transform: translateY(-5px) scale(1.022); filter: brightness(1.25) saturate(1.45); }
+          50% { transform: translateY(-4px) scale(1.016); filter: brightness(1.22) saturate(1.35); }
         }
 
         @keyframes rainbowBorder {
@@ -1488,7 +1496,7 @@ export default function VaultPage() {
 
         @keyframes starDrift {
           0%, 100% { transform: translateY(0) scale(.9); opacity: .35; }
-          50% { transform: translateY(-8px) scale(1.25); opacity: 1; }
+          50% { transform: translateY(-8px) scale(1.2); opacity: 1; }
         }
 
         @keyframes planetFlyOne {
@@ -1517,68 +1525,70 @@ export default function VaultPage() {
 
         @media (max-width: 700px) {
           .page {
-            padding: 14px;
+            padding: 12px;
+            font-size: .84rem;
           }
 
           .header h1 {
-            font-size: 2rem;
-          }
-
-          .tabs {
-            gap: 8px;
+            font-size: 1.85rem;
           }
 
           .tab-button {
-            padding: 10px 12px;
-            font-size: .85rem;
+            padding: 9px 11px;
+            font-size: .8rem;
           }
 
           .break-date-card {
-            padding: 16px;
-            border-radius: 20px;
+            padding: 14px;
+            border-radius: 18px;
           }
 
           .calendar-grid {
-            gap: 6px;
+            gap: 5px;
           }
 
           .calendar-day {
-            height: 42px;
-            border-radius: 12px;
-            font-size: .85rem;
+            height: 38px;
+            border-radius: 11px;
+            font-size: .8rem;
           }
 
           .calendar-day-label {
-            font-size: .68rem;
+            font-size: .62rem;
           }
 
-          .showcase-grid {
-            grid-template-columns: repeat(2, 1fr);
+          .showcase-header {
+            grid-template-columns: 1fr;
           }
 
-          .showcase-stat.featured-pulls {
-            grid-column: span 2;
+          .showcase-rank-card {
+            padding: 11px;
+          }
+
+          .showcase-hit-card {
+            min-height: 195px;
+            padding: 16px;
           }
 
           .hof-podium {
             grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 8px;
+            gap: 7px;
           }
 
           .podium-card {
-            padding: 16px 8px;
+            padding: 14px 7px;
           }
 
           .podium-name {
-            font-size: .9rem;
+            font-size: .82rem;
           }
 
           .podium-title {
-            font-size: .72rem;
+            font-size: .66rem;
           }
 
           .podium-stat {
-            font-size: 1.5rem;
+            font-size: 1.35rem;
           }
         }
 
@@ -1688,39 +1698,64 @@ export default function VaultPage() {
             <h2 className="section-title">🏆 Lifetime Collection</h2>
 
             <div className="collector-showcase">
-              <div className="showcase-topline">Collector Showcase</div>
-              <div className="showcase-title">{collectorTitle}</div>
-
-              <div className="showcase-grid">
-                <div className="showcase-stat">
-                  <div className="showcase-stat-label">Lifetime Hits</div>
-                  <div className="showcase-stat-value">{counts.overall}</div>
+              <div className="showcase-header">
+                <div>
+                  <div className="showcase-topline">Collector Showcase</div>
+                  <div className="showcase-title">{collectorTitle}</div>
                 </div>
 
-                <div className="showcase-stat">
+                <div className="showcase-rank-card">
                   <div className="showcase-stat-label">Collector Rank</div>
-                  <div className="showcase-stat-value">
+                  <div className="showcase-rank-value">
                     {ranks.overall ? `#${ranks.overall}` : '-'}
                   </div>
                 </div>
+              </div>
 
-                <div className="showcase-stat featured-pulls">
-                  <div className="showcase-stat-label">Best Pulls</div>
+              <div className="showcase-best-pull">
+                <div className="showcase-stat-label">Best Pulls</div>
 
-                  {currentBestHit ? (
-                    <div className="best-hit-card">
-                      <div className="best-hit-tier">
+                {currentBestHit ? (
+                  <div className={`showcase-hit-card ${getTierClass(currentBestHit.hit_tier)}`}>
+                    {['sir', 'gold', 'mar'].includes(currentBestHit.hit_tier) && (
+                      <div className="cosmic-stars">
+                        <span>✦</span>
+                        <span>✧</span>
+                        <span>✦</span>
+                        <span>✧</span>
+                      </div>
+                    )}
+
+                    {currentBestHit.hit_tier === 'gold' && (
+                      <div className="planet-field">
+                        <span>🪐</span>
+                        <span>🌕</span>
+                      </div>
+                    )}
+
+                    {currentBestHit.hit_tier === 'sir' && (
+                      <div className="rocket-field">
+                        <span>🚀</span>
+                        <span>☄️</span>
+                      </div>
+                    )}
+
+                    <div className="hit-content">
+                      <div className={`hit-badge badge-${currentBestHit.hit_tier}`}>
                         {getTierEmoji(currentBestHit.hit_tier)}{' '}
                         {tierLabels[currentBestHit.hit_tier]}
                       </div>
 
-                      <div className="best-hit-name">{currentBestHit.spot_name}</div>
+                      <h3>{currentBestHit.spot_name}</h3>
 
-                      <div className="best-hit-meta">
-                        Pulled {formatDate(currentBestHit.revealed_at || currentBestHit.stream_datetime)}
+                      <div className="showcase-hit-date">
+                        Pulled{' '}
+                        {formatDate(currentBestHit.revealed_at || currentBestHit.stream_datetime)}
                       </div>
 
-                      <div className="best-hit-meta">{currentBestHit.break_name}</div>
+                      <div className="showcase-hit-break">
+                        {currentBestHit.break_name}
+                      </div>
 
                       {bestHits.length > 1 && (
                         <div className="best-hit-controls">
@@ -1744,15 +1779,17 @@ export default function VaultPage() {
                         </div>
                       )}
                     </div>
-                  ) : (
-                    <div className="best-hit-card">
-                      <div className="best-hit-name">No MAR+ pulls yet</div>
-                      <div className="best-hit-meta">
-                        Your best hits will appear here automatically.
+                  </div>
+                ) : (
+                  <div className="showcase-hit-card hit-default">
+                    <div className="hit-content">
+                      <h3>No MAR+ pulls yet</h3>
+                      <div className="showcase-hit-date">
+                        Your best pulls will appear here automatically.
                       </div>
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             </div>
 
