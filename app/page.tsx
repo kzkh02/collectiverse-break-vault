@@ -587,7 +587,7 @@ export default function HomePage() {
 
           .logo {
   max-width: 250px;
-  margin: -25px auto -48px;
+  margin: -50px auto -48px;
 }
 
           .featured {
