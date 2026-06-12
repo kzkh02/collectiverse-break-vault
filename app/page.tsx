@@ -21,9 +21,6 @@ function getTierStyle(tier: string | null) {
       return { label: 'SR', className: 'tier-sr', color: '#c084fc' }
     case 'ex':
       return { label: 'EX', className: 'tier-ex', color: '#60a5fa' }
-    case 'reverse_holo':
-    case 'reverse holo':
-      return { label: 'REVERSE HOLO', className: 'tier-reverse', color: '#86efac' }
     default:
       return {
         label: cleanTier ? cleanTier.toUpperCase().replaceAll('_', ' ') : '',
@@ -96,36 +93,38 @@ export default function HomePage() {
           color: white;
           display: flex;
           justify-content: center;
-          align-items: center;
-          padding: 24px;
+          align-items: flex-start;
+          padding: 18px 18px 28px;
           overflow-x: hidden;
         }
 
         .wrap {
-          width: 100%;
-          max-width: 760px;
-          text-align: center;
-        }
+  width: 100%;
+  max-width: 620px;
+  text-align: center;
+  transform: translateY(-180px);
+}
 
         .logo {
           width: 100%;
-          max-width: 620px;
+          max-width: 300px;
           height: auto;
-          margin: 0 auto 8px;
+          margin: 0 auto -74px;
           display: block;
-          filter: drop-shadow(0 22px 50px rgba(0,0,0,.5));
+          filter: drop-shadow(0 14px 32px rgba(0,0,0,.42));
         }
 
         .featured {
           position: relative;
           overflow: hidden;
           isolation: isolate;
-          border-radius: 30px;
-          padding: 34px 26px;
-          margin-bottom: 24px;
+          border-radius: 22px;
+          padding: 16px;
+          margin: 0 0 12px;
+          width: 100%;
           border: 1px solid rgba(255,255,255,.18);
           background: rgba(255,255,255,.07);
-          box-shadow: 0 25px 90px rgba(0,0,0,.42);
+          box-shadow: 0 14px 46px rgba(0,0,0,.32);
         }
 
         .featured::before {
@@ -133,7 +132,7 @@ export default function HomePage() {
           position: absolute;
           inset: -3px;
           z-index: -2;
-          border-radius: 34px;
+          border-radius: 26px;
           opacity: .9;
         }
 
@@ -149,12 +148,108 @@ export default function HomePage() {
           opacity: .45;
         }
 
-        .cosmic-stars {
+        .featured-content {
+          position: relative;
+          z-index: 2;
+        }
+
+        .featured-label {
+          color: #facc15;
+          font-size: .72rem;
+          font-weight: 950;
+          letter-spacing: 2px;
+          margin-bottom: 8px;
+          text-shadow: 0 0 18px rgba(250,204,21,.45);
+        }
+
+        .hit-name {
+          margin: 0;
+          font-size: clamp(1.45rem, 3.2vw, 2.35rem);
+          font-weight: 950;
+          line-height: 1.08;
+          text-transform: uppercase;
+          text-shadow: 0 8px 28px rgba(0,0,0,.45);
+        }
+
+        .tier-badge {
+          display: inline-block;
+          margin-top: 10px;
+          padding: 7px 18px;
+          border-radius: 999px;
+          font-size: .78rem;
+          font-weight: 950;
+          letter-spacing: 1.6px;
+          color: #050505;
+          background: white;
+          box-shadow:
+            0 8px 30px rgba(0,0,0,.3),
+            inset 0 1px 0 rgba(255,255,255,.65);
+        }
+
+        .featured-text {
+          opacity: .94;
+          font-size: .82rem;
+          margin-top: 10px;
+          line-height: 1.45;
+        }
+
+        .search-card {
+          border: 1px solid rgba(255,255,255,.15);
+          background: rgba(255,255,255,.06);
+          border-radius: 20px;
+          padding: 18px;
+          box-shadow: 0 18px 60px rgba(0,0,0,.3);
+          backdrop-filter: blur(12px);
+        }
+
+        .search-card h1 {
+          font-size: 1.8rem;
+          margin: 0 0 6px;
+          letter-spacing: 2px;
+          font-weight: 900;
+        }
+
+        .search-card p {
+          opacity: .85;
+          margin: 0 0 18px;
+          font-size: .9rem;
+          line-height: 1.5;
+        }
+
+        .input {
+          width: 100%;
+          padding: 14px;
+          border-radius: 14px;
+          border: 1px solid rgba(255,255,255,.2);
+          background: rgba(0,0,0,.35);
+          color: white;
+          margin-bottom: 12px;
+          font-size: .92rem;
+          outline: none;
+        }
+
+        .button {
+          width: 100%;
+          padding: 14px;
+          border-radius: 14px;
+          border: none;
+          background: linear-gradient(135deg, #7c3aed, #c084fc);
+          color: white;
+          font-weight: 900;
+          cursor: pointer;
+          font-size: .92rem;
+          letter-spacing: 1px;
+          box-shadow: 0 12px 30px rgba(124,58,237,.45);
+        }
+
+        .cosmic-stars,
+        .planet-field,
+        .rocket-field {
           pointer-events: none;
           position: absolute;
           inset: 0;
           overflow: hidden;
-          z-index: 0;
+          z-index: 1;
         }
 
         .cosmic-stars span {
@@ -168,119 +263,59 @@ export default function HomePage() {
         .cosmic-stars span:nth-child(2) { top: 72%; left: 18%; animation-delay: .7s; }
         .cosmic-stars span:nth-child(3) { top: 20%; right: 14%; animation-delay: 1.2s; }
         .cosmic-stars span:nth-child(4) { bottom: 16%; right: 18%; animation-delay: 1.8s; }
-        .cosmic-stars span:nth-child(5) { top: 48%; left: 6%; animation-delay: 2.4s; }
-        .cosmic-stars span:nth-child(6) { top: 55%; right: 7%; animation-delay: 3s; }
 
-        .orbit-ring {
-          pointer-events: none;
+        .planet-field span {
           position: absolute;
-          inset: 18px;
-          border-radius: 999px;
-          border: 1px solid rgba(255,255,255,.16);
-          transform: rotate(-8deg);
-          animation: orbitPulse 4s infinite ease-in-out;
-          z-index: 0;
+          font-size: 1.25rem;
+          filter: drop-shadow(0 0 12px rgba(250,204,21,.8));
+          opacity: .8;
         }
 
-        .orbit-ring::after {
-          content: '✦';
-          position: absolute;
-          top: -10px;
-          left: 50%;
-          color: white;
-          text-shadow: 0 0 14px rgba(255,255,255,.9);
-          animation: miniOrbit 4s infinite linear;
+        .planet-field span:nth-child(1) {
+          top: 18%;
+          left: -10%;
+          animation: planetFlyOne 6s infinite linear;
         }
 
-        .meteor {
-          pointer-events: none;
+        .planet-field span:nth-child(2) {
+          top: 62%;
+          right: -10%;
+          animation: planetFlyTwo 7s infinite linear;
+        }
+
+        .planet-field span:nth-child(3) {
+          bottom: 18%;
+          left: -12%;
+          animation: planetFlyThree 8s infinite linear;
+        }
+
+        .rocket-field span {
           position: absolute;
-          width: 120px;
-          height: 2px;
-          background: linear-gradient(90deg, transparent, rgba(255,255,255,.9), transparent);
+          font-size: 1.35rem;
+          filter: drop-shadow(0 0 12px rgba(255,255,255,.8));
+        }
+
+        .rocket-field span:nth-child(1) {
           top: 22%;
-          left: -140px;
-          transform: rotate(-20deg);
-          animation: meteor 5s infinite;
-          z-index: 0;
+          left: -15%;
+          animation: rocketFlyOne 3.2s infinite ease-in-out;
         }
-		
-		.planet-field,
-.rocket-field {
-  pointer-events: none;
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  z-index: 1;
-}
 
-.planet-field span {
-  position: absolute;
-  font-size: 1.4rem;
-  filter: drop-shadow(0 0 12px rgba(250,204,21,.8));
-  opacity: .8;
-}
+        .rocket-field span:nth-child(2) {
+          bottom: 24%;
+          right: -15%;
+          transform: rotate(180deg);
+          animation: rocketFlyTwo 3.8s infinite ease-in-out;
+        }
 
-.planet-field span:nth-child(1) {
-  top: 18%;
-  left: -10%;
-  animation: planetFlyOne 6s infinite linear;
-}
-
-.planet-field span:nth-child(2) {
-  top: 62%;
-  right: -10%;
-  animation: planetFlyTwo 7s infinite linear;
-}
-
-.planet-field span:nth-child(3) {
-  bottom: 18%;
-  left: -12%;
-  animation: planetFlyThree 8s infinite linear;
-}
-
-.rocket-field span {
-  position: absolute;
-  font-size: 1.5rem;
-  filter: drop-shadow(0 0 12px rgba(255,255,255,.8));
-}
-
-.rocket-field span:nth-child(1) {
-  top: 22%;
-  left: -15%;
-  animation: rocketFlyOne 3.2s infinite ease-in-out;
-}
-
-.rocket-field span:nth-child(2) {
-  bottom: 24%;
-  right: -15%;
-  transform: rotate(180deg);
-  animation: rocketFlyTwo 3.8s infinite ease-in-out;
-}
-
-.rocket-field span:nth-child(3) {
-  top: 58%;
-  left: -15%;
-  animation: cometFly 4.5s infinite ease-in-out;
-}
+        .rocket-field span:nth-child(3) {
+          top: 58%;
+          left: -15%;
+          animation: cometFly 4.5s infinite ease-in-out;
+        }
 
         .tier-default::before {
           background: linear-gradient(135deg, rgba(250,204,21,.25), rgba(168,85,247,.12));
-        }
-
-        .tier-reverse {
-          box-shadow:
-            0 0 18px rgba(134,239,172,.25),
-            inset 0 0 20px rgba(134,239,172,.08);
-        }
-
-        .tier-reverse::before {
-          background: linear-gradient(135deg, rgba(134,239,172,.28), rgba(255,255,255,.06));
-        }
-
-        .tier-reverse::after {
-          background: linear-gradient(90deg, transparent, rgba(134,239,172,.35), transparent);
-          animation: slowSweep 5s infinite;
         }
 
         .tier-ex {
@@ -388,176 +423,54 @@ export default function HomePage() {
         }
 
         .tier-sir {
-  border: 2px solid rgba(255,255,255,.32);
-  background:
-    radial-gradient(circle at top left, rgba(255,255,255,.14), transparent 28%),
-    linear-gradient(135deg, rgba(255,0,76,.10), rgba(255,176,0,.10), rgba(0,240,255,.08), rgba(139,92,246,.12));
-  box-shadow:
-    0 0 28px rgba(255,176,0,.35),
-    0 0 58px rgba(168,85,247,.25),
-    0 0 80px rgba(34,211,238,.18),
-    inset 0 0 36px rgba(255,255,255,.06);
-  animation: sirLegendaryFloat 2.2s ease-in-out infinite;
-}
+          border: 2px solid rgba(255,255,255,.32);
+          background:
+            radial-gradient(circle at top left, rgba(255,255,255,.14), transparent 28%),
+            linear-gradient(135deg, rgba(255,0,76,.10), rgba(255,176,0,.10), rgba(0,240,255,.08), rgba(139,92,246,.12));
+          box-shadow:
+            0 0 28px rgba(255,176,0,.35),
+            0 0 58px rgba(168,85,247,.25),
+            0 0 80px rgba(34,211,238,.18),
+            inset 0 0 36px rgba(255,255,255,.06);
+          animation: sirLegendaryFloat 2.2s ease-in-out infinite;
+        }
 
         .tier-sir::before {
-  background: linear-gradient(
-    120deg,
-    rgba(255,0,76,.35),
-    rgba(255,176,0,.35),
-    rgba(255,247,0,.28),
-    rgba(0,240,255,.28),
-    rgba(139,92,246,.35),
-    rgba(255,0,76,.35)
-  );
-  animation: rainbowBorder 4.5s linear infinite;
-}
+          background: linear-gradient(
+            120deg,
+            rgba(255,0,76,.35),
+            rgba(255,176,0,.35),
+            rgba(255,247,0,.28),
+            rgba(0,240,255,.28),
+            rgba(139,92,246,.35),
+            rgba(255,0,76,.35)
+          );
+          animation: rainbowBorder 4.5s linear infinite;
+        }
 
         .tier-sir::after {
           background: linear-gradient(90deg, transparent, rgba(255,255,255,.86), rgba(255,176,0,.55), transparent);
           animation: sirSweep 2.4s infinite;
         }
 
-        .featured-content {
-          position: relative;
-          z-index: 2;
-        }
-
-        .featured-label {
-          color: #facc15;
-          font-weight: 950;
-          letter-spacing: 2px;
-          margin-bottom: 12px;
-          text-shadow: 0 0 18px rgba(250,204,21,.45);
-        }
-
-        .hit-name {
-          margin: 0;
-          font-size: clamp(2rem, 5vw, 3.35rem);
-          font-weight: 950;
-          line-height: 1.05;
-          text-transform: uppercase;
-          text-shadow: 0 8px 28px rgba(0,0,0,.45);
-        }
-
-        .tier-badge {
-          display: inline-block;
-          margin-top: 17px;
-          padding: 9px 22px;
-          border-radius: 999px;
-          font-size: .95rem;
-          font-weight: 950;
-          letter-spacing: 1.6px;
-          color: #050505;
-          background: white;
-          box-shadow:
-            0 8px 30px rgba(0,0,0,.3),
-            inset 0 1px 0 rgba(255,255,255,.65);
-        }
-
         .tier-gold .tier-badge {
           background: linear-gradient(135deg, #fff7ad, #facc15, #b45309) !important;
           color: #1f1300;
-          border: 1px solid rgba(255,255,255,.65);
-          box-shadow:
-            0 0 24px rgba(250,204,21,.85),
-            inset 0 1px 0 rgba(255,255,255,.75);
         }
 
         .tier-sir .tier-badge {
           background: linear-gradient(135deg, #ff004c, #ffb000, #fff700, #00f0ff, #8b5cf6) !important;
           color: #160018;
-          border: 1px solid rgba(255,255,255,.65);
-          box-shadow:
-            0 0 26px rgba(255,176,0,.8),
-            0 0 45px rgba(168,85,247,.45);
         }
 
         .tier-mar .tier-badge {
           background: linear-gradient(135deg, #e0f2fe, #38bdf8, #8b5cf6) !important;
           color: #02111f;
-          border: 1px solid rgba(255,255,255,.55);
-          box-shadow:
-            0 0 22px rgba(56,189,248,.75),
-            inset 0 1px 0 rgba(255,255,255,.75);
-        }
-
-        .featured-text {
-          opacity: .94;
-          margin-top: 18px;
-          line-height: 1.65;
-          font-size: 1rem;
-        }
-
-        .search-card {
-          border: 1px solid rgba(255,255,255,.15);
-          background: rgba(255,255,255,.06);
-          border-radius: 24px;
-          padding: 28px;
-          box-shadow: 0 25px 80px rgba(0,0,0,.35);
-          backdrop-filter: blur(12px);
-        }
-
-        .search-card h1 {
-          font-size: 2.2rem;
-          margin-bottom: 8px;
-          letter-spacing: 3px;
-          font-weight: 900;
-        }
-
-        .search-card p {
-          opacity: .85;
-          margin-bottom: 28px;
-          font-size: 1rem;
-          line-height: 1.6;
-        }
-
-        .input {
-          width: 100%;
-          padding: 18px;
-          border-radius: 14px;
-          border: 1px solid rgba(255,255,255,.2);
-          background: rgba(0,0,0,.35);
-          color: white;
-          margin-bottom: 14px;
-          font-size: 1rem;
-          outline: none;
-        }
-
-        .button {
-          width: 100%;
-          padding: 18px;
-          border-radius: 14px;
-          border: none;
-          background: linear-gradient(135deg, #7c3aed, #c084fc);
-          color: white;
-          font-weight: 900;
-          cursor: pointer;
-          font-size: 1rem;
-          letter-spacing: 1px;
-          box-shadow: 0 12px 30px rgba(124,58,237,.45);
         }
 
         @keyframes starDrift {
           0%, 100% { transform: translateY(0) scale(.9); opacity: .35; }
           50% { transform: translateY(-8px) scale(1.25); opacity: 1; }
-        }
-
-        @keyframes orbitPulse {
-          0%, 100% { opacity: .18; transform: rotate(-8deg) scale(1); }
-          50% { opacity: .42; transform: rotate(-4deg) scale(1.02); }
-        }
-
-        @keyframes miniOrbit {
-          0% { transform: translateX(-50%) rotate(0deg); }
-          100% { transform: translateX(-50%) rotate(360deg); }
-        }
-
-        @keyframes meteor {
-          0% { left: -150px; top: 18%; opacity: 0; }
-          15% { opacity: .9; }
-          40% { left: 110%; top: 48%; opacity: 0; }
-          100% { left: 110%; opacity: 0; }
         }
 
         @keyframes slowSweep {
@@ -626,108 +539,88 @@ export default function HomePage() {
           0% { filter: hue-rotate(0deg) saturate(1.25); }
           100% { filter: hue-rotate(360deg) saturate(1.25); }
         }
-		
-		@keyframes planetFlyOne {
-  0% {
-    left: -12%;
-    transform: translateY(0) rotate(0deg) scale(.8);
-    opacity: 0;
-  }
-  15% {
-    opacity: .9;
-  }
-  100% {
-    left: 110%;
-    transform: translateY(26px) rotate(360deg) scale(1.1);
-    opacity: 0;
-  }
-}
 
-@keyframes planetFlyTwo {
-  0% {
-    right: -12%;
-    transform: translateY(0) rotate(0deg) scale(.9);
-    opacity: 0;
-  }
-  15% {
-    opacity: .8;
-  }
-  100% {
-    right: 110%;
-    transform: translateY(-30px) rotate(-360deg) scale(1.15);
-    opacity: 0;
-  }
-}
+        @keyframes planetFlyOne {
+          0% { left: -12%; transform: translateY(0) rotate(0deg) scale(.8); opacity: 0; }
+          15% { opacity: .9; }
+          100% { left: 110%; transform: translateY(26px) rotate(360deg) scale(1.1); opacity: 0; }
+        }
 
-@keyframes planetFlyThree {
-  0% {
-    left: -14%;
-    transform: translateY(0) rotate(0deg) scale(.7);
-    opacity: 0;
-  }
-  20% {
-    opacity: .75;
-  }
-  100% {
-    left: 105%;
-    transform: translateY(-20px) rotate(260deg) scale(1);
-    opacity: 0;
-  }
-}
+        @keyframes planetFlyTwo {
+          0% { right: -12%; transform: translateY(0) rotate(0deg) scale(.9); opacity: 0; }
+          15% { opacity: .8; }
+          100% { right: 110%; transform: translateY(-30px) rotate(-360deg) scale(1.15); opacity: 0; }
+        }
 
-@keyframes rocketFlyOne {
-  0% {
-    left: -18%;
-    transform: translateY(0) rotate(25deg) scale(.9);
-    opacity: 0;
-  }
-  15% {
-    opacity: 1;
-  }
-  100% {
-    left: 115%;
-    transform: translateY(-45px) rotate(25deg) scale(1.2);
-    opacity: 0;
-  }
-}
+        @keyframes planetFlyThree {
+          0% { left: -14%; transform: translateY(0) rotate(0deg) scale(.7); opacity: 0; }
+          20% { opacity: .75; }
+          100% { left: 105%; transform: translateY(-20px) rotate(260deg) scale(1); opacity: 0; }
+        }
 
-@keyframes rocketFlyTwo {
-  0% {
-    right: -18%;
-    transform: translateY(0) rotate(205deg) scale(.9);
-    opacity: 0;
-  }
-  15% {
-    opacity: 1;
-  }
-  100% {
-    right: 115%;
-    transform: translateY(-35px) rotate(205deg) scale(1.2);
-    opacity: 0;
-  }
-}
+        @keyframes rocketFlyOne {
+          0% { left: -18%; transform: translateY(0) rotate(25deg) scale(.9); opacity: 0; }
+          15% { opacity: 1; }
+          100% { left: 115%; transform: translateY(-45px) rotate(25deg) scale(1.2); opacity: 0; }
+        }
 
-@keyframes cometFly {
-  0% {
-    left: -18%;
-    transform: translateY(0) rotate(-12deg) scale(.8);
-    opacity: 0;
-  }
-  20% {
-    opacity: .9;
-  }
-  100% {
-    left: 115%;
-    transform: translateY(22px) rotate(-12deg) scale(1.1);
-    opacity: 0;
-  }
-}
+        @keyframes rocketFlyTwo {
+          0% { right: -18%; transform: translateY(0) rotate(205deg) scale(.9); opacity: 0; }
+          15% { opacity: 1; }
+          100% { right: 115%; transform: translateY(-35px) rotate(205deg) scale(1.2); opacity: 0; }
+        }
+
+        @keyframes cometFly {
+          0% { left: -18%; transform: translateY(0) rotate(-12deg) scale(.8); opacity: 0; }
+          20% { opacity: .9; }
+          100% { left: 115%; transform: translateY(22px) rotate(-12deg) scale(1.1); opacity: 0; }
+        }
 
         @media (max-width: 600px) {
-          .page { padding: 16px; align-items: flex-start; }
-          .logo { max-width: 430px; }
-          .featured { padding: 26px 18px; }
-          .search-card { padding: 22px; }
+          .page {
+            padding: 12px;
+          }
+
+          .wrap {
+            max-width: 100%;
+          }
+
+          .logo {
+            max-width: 260px;
+            margin: 0 auto -58px;
+          }
+
+          .featured {
+            padding: 15px;
+            border-radius: 20px;
+          }
+
+          .hit-name {
+            font-size: 1.35rem;
+          }
+
+          .featured-text {
+            font-size: .78rem;
+          }
+
+          .search-card {
+            padding: 16px;
+          }
+
+          .search-card h1 {
+            font-size: 1.55rem;
+          }
+
+          .search-card p {
+            font-size: .82rem;
+            margin-bottom: 14px;
+          }
+
+          .input,
+          .button {
+            padding: 13px;
+            font-size: .86rem;
+          }
         }
       `}</style>
 
@@ -742,32 +635,32 @@ export default function HomePage() {
         />
 
         <section className={`featured ${tier.className}`}>
-         {showCosmic && (
-  <>
-    <div className="cosmic-stars">
-      <span>✦</span>
-      <span>✧</span>
-      <span>✦</span>
-      <span>✧</span>
-    </div>
+          {showCosmic && (
+            <>
+              <div className="cosmic-stars">
+                <span>✦</span>
+                <span>✧</span>
+                <span>✦</span>
+                <span>✧</span>
+              </div>
 
-    {featuredHit?.hit_tier === 'gold' && (
-      <div className="planet-field">
-        <span>🪐</span>
-        <span>🌕</span>
-        <span>🪐</span>
-      </div>
-    )}
+              {featuredHit?.hit_tier === 'gold' && (
+                <div className="planet-field">
+                  <span>🪐</span>
+                  <span>🌕</span>
+                  <span>🪐</span>
+                </div>
+              )}
 
-    {featuredHit?.hit_tier === 'sir' && (
-      <div className="rocket-field">
-        <span>🚀</span>
-        <span>🚀</span>
-        <span>☄️</span>
-      </div>
-    )}
-  </>
-)}
+              {featuredHit?.hit_tier === 'sir' && (
+                <div className="rocket-field">
+                  <span>🚀</span>
+                  <span>🚀</span>
+                  <span>☄️</span>
+                </div>
+              )}
+            </>
+          )}
 
           <div className="featured-content">
             <div className="featured-label">🔥 FEATURED HIT</div>
