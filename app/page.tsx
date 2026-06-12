@@ -622,6 +622,34 @@ export default function HomePage() {
             font-size: .86rem;
           }
         }
+		
+		@media (max-width: 600px) {
+  .page {
+    padding: 10px 12px 20px;
+    align-items: flex-start;
+  }
+
+  .wrap {
+    width: 100%;
+    max-width: 100%;
+    transform: translateY(-35px);
+  }
+
+  .logo {
+    max-width: 250px;
+    margin: 0 auto -48px;
+  }
+
+  .featured {
+    width: 100%;
+    padding: 14px;
+    margin-bottom: 10px;
+  }
+
+  .search-card {
+    padding: 16px;
+  }
+}
       `}</style>
 
       <div className="wrap">
