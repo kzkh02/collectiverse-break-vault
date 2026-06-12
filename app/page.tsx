@@ -586,9 +586,9 @@ export default function HomePage() {
           }
 
           .logo {
-            max-width: 260px;
-            margin: 0 auto -58px;
-          }
+  max-width: 250px;
+  margin: -25px auto -48px;
+}
 
           .featured {
             padding: 15px;
