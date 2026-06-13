@@ -4,6 +4,7 @@ import Papa from 'papaparse'
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '../../../lib/supabase'
+import AdminGuard from '../AdminGuard'
 
 function clean(value: unknown) {
   return String(value ?? '').trim()
@@ -262,6 +263,7 @@ export default function ImportPage() {
   }
 
   return (
+  <AdminGuard>
     <main className="page">
       <style jsx global>{`
         .page {
@@ -578,7 +580,8 @@ export default function ImportPage() {
             </div>
           </section>
         )}
-      </div>
+         </div>
     </main>
+  </AdminGuard>
   )
 }
