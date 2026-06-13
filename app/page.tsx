@@ -86,10 +86,6 @@ export default function HomePage() {
 
  return (
   <main className="page">
-    <Link href="/admin" className="admin-bubble">
-      ⚙️ Admin
-    </Link>
-	
       <style jsx>{`
         .page {
           min-height: 100vh;
@@ -473,25 +469,24 @@ export default function HomePage() {
           color: #02111f;
         }
 		
-		.admin-bubble {
-  position: fixed;
-  top: 18px;
-  right: 18px;
-  z-index: 999;
-  border: 1px solid rgba(255,255,255,.18);
-  background: rgba(255,255,255,.09);
-  color: white;
-  padding: 10px 14px;
-  border-radius: 999px;
+		.admin-link {
+  display: block;
+  width: fit-content;
+  margin: 13px auto 0;
+  color: rgba(255,255,255,.78);
   text-decoration: none;
-  font-weight: 950;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 12px 34px rgba(0,0,0,.28);
+  font-weight: 850;
+  font-size: .86rem;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.055);
 }
 
-.admin-bubble:hover {
-  background: rgba(124,58,237,.22);
-  border-color: rgba(192,132,252,.45);
+.admin-link:hover {
+  color: white;
+  background: rgba(124,58,237,.20);
+  border-color: rgba(192,132,252,.38);
 }
 
         @keyframes starDrift {
@@ -770,6 +765,10 @@ export default function HomePage() {
           <button className="button" onClick={searchVault}>
             VIEW MY VAULT
           </button>
+
+          <Link href="/admin" className="admin-link">
+            ⚙️ Admin
+          </Link>
         </section>
            </div>
     </main>
