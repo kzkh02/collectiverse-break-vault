@@ -51,24 +51,30 @@ export default function ImportPage() {
         let imported = 0
         let failed = 0
 
-        const firstBreakName = clean(rows[0].Title)
+ const breakIdByName = new Map<string, string>()
 
-        const { data: newBreak, error: newBreakError } = await supabase
-          .from('breaks')
-          .insert({
-            break_name: firstBreakName,
-            status: 'open',
-            stream_datetime: streamDateTime,
-          })
-          .select('id')
-          .single()
+const uniqueBreakNames = [
+  ...new Set(rows.map((row: any) => clean(row.Title))),
+]
 
-        if (newBreakError) {
-          setMessage(`Break error: ${newBreakError.message}`)
-          return
-        }
+for (const breakName of uniqueBreakNames) {
+  const { data: newBreak, error: newBreakError } = await supabase
+    .from('breaks')
+    .insert({
+      break_name: breakName,
+      status: 'open',
+      stream_datetime: streamDateTime,
+    })
+    .select('id')
+    .single()
 
-        const breakId = newBreak.id
+  if (newBreakError) {
+    setMessage(`Break error: ${newBreakError.message}`)
+    return
+  }
+
+  breakIdByName.set(breakName, newBreak.id)
+}
 
         for (const row of rows) {
           const spotName = clean(row.Product)
@@ -104,7 +110,7 @@ export default function ImportPage() {
           }
 
           const entry = await supabase.from('entries').insert({
-            break_id: breakId,
+            break_id: breakIdByName.get(clean(row.Title)),
             collector_id: collectorId,
             spot_name: spotName,
             is_hit: false,
