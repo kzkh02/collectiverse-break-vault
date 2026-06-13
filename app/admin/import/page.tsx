@@ -43,17 +43,39 @@ export default function ImportPage() {
 
         const skipped = allRows.length - rows.length
 
+        if (rows.length === 0) {
+          setMessage('No valid rows found in this CSV.')
+          return
+        }
+
         let imported = 0
         let failed = 0
 
+        const firstBreakName = clean(rows[0].Title)
+
+        const { data: newBreak, error: newBreakError } = await supabase
+          .from('breaks')
+          .insert({
+            break_name: firstBreakName,
+            status: 'open',
+            stream_datetime: streamDateTime,
+          })
+          .select('id')
+          .single()
+
+        if (newBreakError) {
+          setMessage(`Break error: ${newBreakError.message}`)
+          return
+        }
+
+        const breakId = newBreak.id
+
         for (const row of rows) {
-          const breakName = clean(row.Title)
           const spotName = clean(row.Product)
           const username = clean(row.Username)
           const usernameNormalised = normaliseName(username)
 
           let collectorId = null
-          let breakId = null
 
           const existingCollector = await supabase
             .from('collectors')
@@ -74,45 +96,11 @@ export default function ImportPage() {
               .single()
 
             if (newCollector.error) {
-              setMessage(`Collector error: ${newCollector.error.message}`)
-              return
+              failed++
+              continue
             }
 
             collectorId = newCollector.data.id
-          }
-
-          const existingBreak = await supabase
-            .from('breaks')
-            .select('id')
-            .eq('break_name', breakName)
-            .maybeSingle()
-
-          if (existingBreak.data) {
-            breakId = existingBreak.data.id
-
-            await supabase
-              .from('breaks')
-              .update({
-                stream_datetime: streamDateTime,
-              })
-              .eq('id', breakId)
-          } else {
-            const newBreak = await supabase
-              .from('breaks')
-              .insert({
-                break_name: breakName,
-                status: 'open',
-                stream_datetime: streamDateTime,
-              })
-              .select('id')
-              .single()
-
-            if (newBreak.error) {
-              setMessage(`Break error: ${newBreak.error.message}`)
-              return
-            }
-
-            breakId = newBreak.data.id
           }
 
           const entry = await supabase.from('entries').insert({
@@ -136,7 +124,7 @@ export default function ImportPage() {
         })
 
         setMessage(
-          `Imported ${imported} entries. Skipped ${skipped} non-spots. Failed ${failed}.`
+          `Created new break and imported ${imported} entries. Skipped ${skipped} non-spots. Failed ${failed}.`
         )
       },
     })
