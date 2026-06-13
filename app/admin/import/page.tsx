@@ -4,7 +4,7 @@ import Papa from 'papaparse'
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '../../../lib/supabase'
-import AdminGuard from '../../guard'
+import AdminGuard from '../guard'
 
 function clean(value: unknown) {
   return String(value ?? '').trim()
