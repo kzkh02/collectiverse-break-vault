@@ -4,13 +4,9 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
 
-export default function AdminGuard({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function AdminGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter()
-  const [loading, setLoading] = useState(true)
+  const [checking, setChecking] = useState(true)
 
   useEffect(() => {
     async function checkSession() {
@@ -21,14 +17,18 @@ export default function AdminGuard({
         return
       }
 
-      setLoading(false)
+      setChecking(false)
     }
 
     checkSession()
   }, [router])
 
-  if (loading) {
-    return <div>Checking admin access...</div>
+  if (checking) {
+    return (
+      <main style={{ padding: 40, color: 'white' }}>
+        Checking admin access...
+      </main>
+    )
   }
 
   return <>{children}</>

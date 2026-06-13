@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '../../../lib/supabase'
-import AdminGuard from '../AdminGuard'
+import AdminGuard from '../guard'
 
 type BreakFilter = 'open' | 'completed' | 'all'
 

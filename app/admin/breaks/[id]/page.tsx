@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '../../../../lib/supabase'
-import AdminGuard from '../../AdminGuard'
+import AdminGuard from '../../guard'
 
 type FilterMode = 'all' | 'hits' | 'not_hits' | 'featured'
 
