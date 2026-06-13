@@ -597,6 +597,19 @@ Once they jump into their first break, their Vault will be waiting for them here
 
 function MessageCard() {
   if (!message) return null
+  
+  if (message === MESSAGE_NO_COLLECTOR) {
+  return (
+    <div className="empty-state-card">
+      <div className="empty-state-icon">🚀</div>
+      <h2>No Collectiverse Vault Found</h2>
+      <p>
+        Looks like this collector hasn't joined a Collectiverse break yet.
+        Once they jump into their first break, their Vault will be waiting for them here.
+      </p>
+    </div>
+  )
+}
 
   if (message === MESSAGE_NO_ENTRIES) {
     return (
@@ -1822,11 +1835,6 @@ function MessageCard() {
           </button>
         </div>
 		
-		{message && (
-  <div className="vault-message">
-    {message}
-  </div>
-)}
 
         {message && message !== 'Loading vault...' && <MessageCard />}
 
