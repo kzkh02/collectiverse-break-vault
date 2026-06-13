@@ -17,7 +17,9 @@ export const metadata = {
   description: 'Every hit. Every break.',
   icons: {
     icon: '/favicon.png',
+    apple: '/apple-touch-icon.png',
   },
+  manifest: '/manifest.json',
 }
 
 export default function RootLayout({
