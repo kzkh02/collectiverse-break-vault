@@ -4,6 +4,7 @@ import Image from 'next/image'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../lib/supabase'
+import Link from 'next/link'
 
 function getTierStyle(tier: string | null) {
   const cleanTier = String(tier || '').toLowerCase().trim()
@@ -83,7 +84,10 @@ export default function HomePage() {
     String(featuredHit?.hit_tier || '').toLowerCase()
   )
 
-  return (
+  return 
+ <Link href="/admin" className="admin-bubble">
+  ⚙️ Admin
+</Link>
     <main className="page">
       <style jsx>{`
         .page {
@@ -467,6 +471,27 @@ export default function HomePage() {
           background: linear-gradient(135deg, #e0f2fe, #38bdf8, #8b5cf6) !important;
           color: #02111f;
         }
+		
+		.admin-bubble {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 999;
+  border: 1px solid rgba(255,255,255,.18);
+  background: rgba(255,255,255,.09);
+  color: white;
+  padding: 10px 14px;
+  border-radius: 999px;
+  text-decoration: none;
+  font-weight: 950;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 12px 34px rgba(0,0,0,.28);
+}
+
+.admin-bubble:hover {
+  background: rgba(124,58,237,.22);
+  border-color: rgba(192,132,252,.45);
+}
 
         @keyframes starDrift {
           0%, 100% { transform: translateY(0) scale(.9); opacity: .35; }
