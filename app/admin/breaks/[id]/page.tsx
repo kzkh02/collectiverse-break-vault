@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '../../../../lib/supabase'
+import AdminGuard from '../../AdminGuard'
 
 type FilterMode = 'all' | 'hits' | 'not_hits' | 'featured'
 
@@ -397,7 +398,8 @@ export default function BreakPage() {
   }, [breakId])
 
   return (
-    <main className="admin-page">
+    <AdminGuard>
+      <main className="admin-page">
       <style jsx global>{`
         .admin-page {
           min-height: 100vh;
@@ -833,6 +835,7 @@ export default function BreakPage() {
           ))}
         </section>
       </div>
-    </main>
+      </main>
+    </AdminGuard>
   )
 }

@@ -13,7 +13,7 @@ export default function AdminGuard({ children }: { children: React.ReactNode }) 
       const { data } = await supabase.auth.getSession()
 
       if (!data.session) {
-        router.push('/admin/login')
+        router.replace('/admin/login')
         return
       }
 
@@ -25,7 +25,18 @@ export default function AdminGuard({ children }: { children: React.ReactNode }) 
 
   if (checking) {
     return (
-      <main style={{ padding: 40, color: 'white' }}>
+      <main
+        style={{
+          minHeight: '100vh',
+          background: 'radial-gradient(circle at top, #15157a 0%, #06063d 45%, #02021f 100%)',
+          color: 'white',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 24,
+          fontWeight: 900,
+        }}
+      >
         Checking admin access...
       </main>
     )
