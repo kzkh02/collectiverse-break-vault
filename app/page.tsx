@@ -84,13 +84,12 @@ export default function HomePage() {
     String(featuredHit?.hit_tier || '').toLowerCase()
   )
 
-  return (
-  <>
-   <Link href="/admin" className="admin-bubble">
-  ⚙️ Admin
-</Link>
-
-    <main className="page">
+ return (
+  <main className="page">
+    <Link href="/admin" className="admin-bubble">
+      ⚙️ Admin
+    </Link>
+	
       <style jsx>{`
         .page {
           min-height: 100vh;
