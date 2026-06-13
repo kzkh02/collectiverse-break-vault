@@ -472,7 +472,7 @@ export default function HomePage() {
 		.admin-link {
   display: block;
   width: fit-content;
-  margin: 13px auto 0;
+  margin: 25px auto 0;
   color: rgba(255,255,255,.78);
   text-decoration: none;
   font-weight: 850;
