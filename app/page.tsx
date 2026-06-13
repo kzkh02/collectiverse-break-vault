@@ -771,8 +771,7 @@ export default function HomePage() {
             VIEW MY VAULT
           </button>
         </section>
-      </div>
-       </main>
-  </>
-)
+           </div>
+    </main>
+  )
 }
