@@ -13,7 +13,7 @@ export default function AdminGuard({
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    async function check() {
+    async function checkSession() {
       const { data } = await supabase.auth.getSession()
 
       if (!data.session) {
@@ -24,36 +24,11 @@ export default function AdminGuard({
       setLoading(false)
     }
 
-    check()
+    checkSession()
   }, [router])
 
-  if (loading) return <div>Loading...</div>
-
-  return <>{children}</>
-}
-      setChecking(false)
-    }
-
-    checkAuth()
-  }, [router])
-
-  if (checking) {
-    return (
-      <main
-        style={{
-          minHeight: '100vh',
-          background: 'radial-gradient(circle at top, #15157a 0%, #06063d 45%, #02021f 100%)',
-          color: 'white',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: 24,
-          fontWeight: 900,
-        }}
-      >
-        Checking admin access...
-      </main>
-    )
+  if (loading) {
+    return <div>Checking admin access...</div>
   }
 
   return <>{children}</>
