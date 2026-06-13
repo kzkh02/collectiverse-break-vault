@@ -68,12 +68,12 @@ for (const breakName of uniqueBreakNames) {
     .select('id')
     .single()
 
-  if (newBreakError) {
-    setMessage(`Break error: ${newBreakError.message}`)
+  if (newBreakError || !newBreak) {
+    setMessage(`Break error: ${newBreakError?.message || 'No break returned'}`)
     return
   }
 
-  breakIdByName.set(breakName, newBreak.id)
+  breakIdByName.set(breakName, String(newBreak.id))
 }
 
         for (const row of rows) {
