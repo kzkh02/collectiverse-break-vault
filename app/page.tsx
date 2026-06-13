@@ -85,9 +85,11 @@ export default function HomePage() {
   )
 
   return 
- <Link href="/admin" className="admin-bubble">
+  <>
+   <Link href="/admin" className="admin-bubble">
   ⚙️ Admin
 </Link>
+
     <main className="page">
       <style jsx>{`
         .page {
@@ -771,6 +773,7 @@ export default function HomePage() {
           </button>
         </section>
       </div>
-    </main>
-  )
+       </main>
+  </>
+)
 }
