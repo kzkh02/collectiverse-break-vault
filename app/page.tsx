@@ -84,7 +84,7 @@ export default function HomePage() {
     String(featuredHit?.hit_tier || '').toLowerCase()
   )
 
-  return 
+  return (
   <>
    <Link href="/admin" className="admin-bubble">
   ⚙️ Admin
