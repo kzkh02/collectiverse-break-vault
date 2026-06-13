@@ -35,6 +35,12 @@ const tierLabels: Record<string, string> = {
 const hitTiers: HitTier[] = ['sir', 'gold', 'mar', 'ir', 'sr', 'ex']
 const showcaseTiers = ['sir', 'gold', 'mar']
 
+const DEMO_USERNAME = 'demo'
+
+const MESSAGE_NO_COLLECTOR = 'NO_COLLECTOR'
+const MESSAGE_NO_ENTRIES = 'NO_ENTRIES'
+const MESSAGE_NO_HITS = 'NO_HITS'
+
 function todayDate() {
   return new Date().toISOString().split('T')[0]
 }
@@ -189,6 +195,8 @@ function getStatusBadges(rank: number | null): CollectorBadge[] {
 export default function VaultPage() {
   const params = useParams()
   const username = params.username as string
+  
+  const isDemoVault = username.toLowerCase().trim() === DEMO_USERNAME
 
   const [tab, setTab] = useState<Tab>('latest')
   const [selectedDate, setSelectedDate] = useState(todayDate())
@@ -197,6 +205,7 @@ export default function VaultPage() {
   const [hallOfFame, setHallOfFame] = useState<HallOfFameCollector[]>([])
   const [bestHitIndex, setBestHitIndex] = useState(0)
   const [message, setMessage] = useState('Loading vault...')
+  
 
   const [ranks, setRanks] = useState<Record<RankKey, number | null>>({
     overall: null,
@@ -209,156 +218,199 @@ export default function VaultPage() {
   })
 
   async function loadVault() {
-    const normalisedUsername = username.toLowerCase().trim()
+    try {
+      const normalisedUsername = username.toLowerCase().trim()
 
-    const { data: collectorData } = await supabase
-      .from('collectors')
-      .select('*')
-      .eq('whatnot_name_normalized', normalisedUsername)
-      .maybeSingle()
+      setMessage('Loading vault...')
 
-    if (!collectorData) {
-      setMessage('No vault found for this Whatnot username yet.')
-      return
-    }
+      const { data: collectorData } = await supabase
+        .from('collectors')
+        .select('*')
+        .eq('whatnot_name_normalized', normalisedUsername)
+        .maybeSingle()
 
-    setCollector(collectorData)
-
-    const { data: allEntries } = await supabase
-      .from('entries')
-      .select('*')
-      .eq('collector_id', collectorData.id)
-
-    if (!allEntries || allEntries.length === 0) {
-      setMessage('No break entries found yet.')
-      return
-    }
-
-    const breakIds = [
-      ...new Set(allEntries.map((entry) => entry.break_id).filter(Boolean)),
-    ]
-
-    const { data: breaks } =
-      breakIds.length > 0
-        ? await supabase
-            .from('breaks')
-            .select('*')
-            .in('id', breakIds)
-            .order('stream_datetime', { ascending: false })
-        : { data: [] }
-
-    const breakMap: Record<string, any> = {}
-
-    ;(breaks || []).forEach((breakItem) => {
-      breakMap[breakItem.id] = breakItem
-    })
-
-    const { data: allHits } = await supabase
-      .from('entries')
-      .select('*')
-      .eq('collector_id', collectorData.id)
-      .eq('is_hit', true)
-      .neq('hit_tier', 'reverse_holo')
-      .order('revealed_at', { ascending: false })
-
-    const hitsWithBreaks = (allHits || []).map((hit) => ({
-      ...hit,
-      break_name: breakMap[hit.break_id]?.break_name || 'Unknown Break',
-      stream_datetime: breakMap[hit.break_id]?.stream_datetime || null,
-    }))
-
-    setHits(hitsWithBreaks)
-
-    const { data: allHitEntries } = await supabase
-      .from('entries')
-      .select('collector_id, hit_tier')
-      .eq('is_hit', true)
-      .neq('hit_tier', 'reverse_holo')
-
-    const totals: Record<string, RankTotals> = {}
-
-    ;(allHitEntries || []).forEach((entry) => {
-      if (!totals[entry.collector_id]) {
-        totals[entry.collector_id] = getEmptyRankTotals()
+      if (!collectorData) {
+        setCollector(null)
+        setHits([])
+        setHallOfFame([])
+        setMessage(MESSAGE_NO_COLLECTOR)
+        return
       }
 
-      totals[entry.collector_id].overall += 1
+      setCollector(collectorData)
 
-      if (hitTiers.includes(entry.hit_tier as HitTier)) {
-        totals[entry.collector_id][entry.hit_tier as HitTier] += 1
+      const { data: allEntries } = await supabase
+        .from('entries')
+        .select('*')
+        .eq('collector_id', collectorData.id)
+
+     if (!allEntries || allEntries.length === 0) {
+  setMessage(`
+🚀 No Collectiverse Vault Found
+
+Looks like this collector hasn't joined a Collectiverse break yet.
+
+Once they jump into their first break, their Vault will be waiting for them here.
+  `)
+  return
+}
+
+      const breakIds = [
+        ...new Set(allEntries.map((entry) => entry.break_id).filter(Boolean)),
+      ]
+
+      const { data: breaks } =
+        breakIds.length > 0
+          ? await supabase
+              .from('breaks')
+              .select('*')
+              .in('id', breakIds)
+              .order('stream_datetime', { ascending: false })
+          : { data: [] }
+
+      const breakMap: Record<string, any> = {}
+
+      ;(breaks || []).forEach((breakItem) => {
+        breakMap[breakItem.id] = breakItem
+      })
+
+      const { data: allHits } = await supabase
+        .from('entries')
+        .select('*')
+        .eq('collector_id', collectorData.id)
+        .eq('is_hit', true)
+        .neq('hit_tier', 'reverse_holo')
+        .order('revealed_at', { ascending: false })
+
+      const hitsWithBreaks = (allHits || []).map((hit) => ({
+        ...hit,
+        break_name: breakMap[hit.break_id]?.break_name || 'Unknown Break',
+        stream_datetime: breakMap[hit.break_id]?.stream_datetime || null,
+      }))
+
+      setHits(hitsWithBreaks)
+
+      if (hitsWithBreaks.length === 0) {
+  setMessage(
+    "🎲 THE PACK GODS WERE NOT WITH YOU... YET\n\nYou've joined the Collectiverse journey, but your first hit is still out there waiting.\n\nEvery legend starts somewhere.\n\n🍀 First Hit Incoming"
+  )
+  return
+}
+
+      const { data: allHitEntries } = await supabase
+        .from('entries')
+        .select('collector_id, hit_tier')
+        .eq('is_hit', true)
+        .neq('hit_tier', 'reverse_holo')
+
+      const rawTotals: Record<string, RankTotals> = {}
+
+      ;(allHitEntries || []).forEach((entry) => {
+        if (!rawTotals[entry.collector_id]) {
+          rawTotals[entry.collector_id] = getEmptyRankTotals()
+        }
+
+        rawTotals[entry.collector_id].overall += 1
+
+        if (hitTiers.includes(entry.hit_tier as HitTier)) {
+          rawTotals[entry.collector_id][entry.hit_tier as HitTier] += 1
+        }
+      })
+
+      const allCollectorIds = Object.keys(rawTotals)
+
+      const { data: collectorNames } =
+        allCollectorIds.length > 0
+          ? await supabase
+              .from('collectors')
+              .select('id, whatnot_name, whatnot_name_normalized')
+              .in('id', allCollectorIds)
+          : { data: [] }
+
+      const collectorNameMap: Record<string, string> = {}
+      const demoCollectorIds = new Set<string>()
+
+      ;(collectorNames || []).forEach((item) => {
+        collectorNameMap[item.id] = item.whatnot_name
+
+        const normalizedName = String(
+          item.whatnot_name_normalized || item.whatnot_name || ''
+        )
+          .toLowerCase()
+          .trim()
+
+        if (normalizedName === DEMO_USERNAME) {
+          demoCollectorIds.add(item.id)
+        }
+      })
+
+      const rankingTotals: Record<string, RankTotals> = {}
+
+      Object.entries(rawTotals).forEach(([collectorId, collectorTotals]) => {
+        if (demoCollectorIds.has(collectorId)) return
+        rankingTotals[collectorId] = collectorTotals
+      })
+
+      function getRank(type: RankKey) {
+        if (isDemoVault) return null
+
+        const currentCount = rankingTotals[collectorData.id]?.[type] || 0
+
+        if (currentCount === 0) return null
+
+        return (
+          Object.values(rankingTotals).filter(
+            (collectorTotals) => collectorTotals[type] > currentCount
+          ).length + 1
+        )
       }
-    })
 
-    const collectorIds = Object.keys(totals)
+      const currentRanks = {
+        overall: getRank('overall'),
+        sir: getRank('sir'),
+        gold: getRank('gold'),
+        mar: getRank('mar'),
+        ir: getRank('ir'),
+        sr: getRank('sr'),
+        ex: getRank('ex'),
+      }
 
-    const { data: collectorNames } =
-      collectorIds.length > 0
-        ? await supabase
-            .from('collectors')
-            .select('id, whatnot_name')
-            .in('id', collectorIds)
-        : { data: [] }
+      setRanks(currentRanks)
 
-    const collectorNameMap: Record<string, string> = {}
+      setHallOfFame(
+        Object.entries(rankingTotals)
+          .map(([collectorId, collectorTotals]) => {
+            const rank =
+              Object.values(rankingTotals).filter(
+                (otherTotals) => otherTotals.overall > collectorTotals.overall
+              ).length + 1
 
-    ;(collectorNames || []).forEach((item) => {
-      collectorNameMap[item.id] = item.whatnot_name
-    })
-
-    function getRank(type: RankKey) {
-      const currentCount = totals[collectorData.id]?.[type] || 0
-
-      if (currentCount === 0) return null
-
-      return (
-        Object.values(totals).filter(
-          (collectorTotals) => collectorTotals[type] > currentCount
-        ).length + 1
+            return {
+              collectorId,
+              name: collectorNameMap[collectorId] || 'Unknown Collector',
+              totalHits: collectorTotals.overall,
+              rank,
+              title: getCollectorTitle(rank),
+            }
+          })
+          .sort((a, b) => {
+            if (b.totalHits !== a.totalHits) return b.totalHits - a.totalHits
+            return a.name.localeCompare(b.name)
+          })
+          .slice(0, 10)
       )
+
+      const newestBreak = breaks?.[0]
+
+      if (newestBreak) {
+        setSelectedDate(dateValue(newestBreak.stream_datetime))
+      }
+
+      setMessage('')
+    } catch (error) {
+      console.error('Vault loading error:', error)
+      setMessage('Something went wrong while loading this vault. Please try again.')
     }
-
-    const currentRanks = {
-      overall: getRank('overall'),
-      sir: getRank('sir'),
-      gold: getRank('gold'),
-      mar: getRank('mar'),
-      ir: getRank('ir'),
-      sr: getRank('sr'),
-      ex: getRank('ex'),
-    }
-
-    setRanks(currentRanks)
-
-    setHallOfFame(
-      Object.entries(totals)
-        .map(([collectorId, collectorTotals]) => {
-          const rank =
-            Object.values(totals).filter(
-              (otherTotals) => otherTotals.overall > collectorTotals.overall
-            ).length + 1
-
-          return {
-            collectorId,
-            name: collectorNameMap[collectorId] || 'Unknown Collector',
-            totalHits: collectorTotals.overall,
-            rank,
-            title: getCollectorTitle(rank),
-          }
-        })
-        .sort((a, b) => {
-          if (b.totalHits !== a.totalHits) return b.totalHits - a.totalHits
-          return a.name.localeCompare(b.name)
-        })
-        .slice(0, 10)
-    )
-
-    const newestBreak = breaks?.[0]
-
-    if (newestBreak) {
-      setSelectedDate(dateValue(newestBreak.stream_datetime))
-    }
-
-    setMessage('')
   }
 
   useEffect(() => {
@@ -542,6 +594,41 @@ export default function VaultPage() {
       </div>
     )
   }
+
+function MessageCard() {
+  if (!message) return null
+
+  if (message === MESSAGE_NO_ENTRIES) {
+    return (
+      <div className="empty-state-card">
+        <div className="empty-state-icon">🚀</div>
+        <h2>No Collectiverse Vault Found</h2>
+        <p>
+          Looks like this collector hasn&apos;t joined a Collectiverse break yet.
+          Once they jump into their first break, their Vault will be waiting for them here.
+        </p>
+      </div>
+    )
+  }
+
+  if (message === MESSAGE_NO_HITS) {
+    return (
+      <div className="empty-state-card pack-gods-card">
+        <div className="empty-state-icon">🎲</div>
+        <h2>The Pack Gods Were Not With You... Yet</h2>
+        <p>
+          You&apos;ve joined the Collectiverse journey, but your first hit is still out there waiting.
+          Every legend starts somewhere. We&apos;ll be ready when that first big pull lands.
+        </p>
+        <div className="empty-state-pill">🍀 First Hit Incoming</div>
+      </div>
+    )
+  }
+
+  return null
+}
+
+  const isReady = message === ''
 
   return (
     <main className="page">
@@ -906,6 +993,94 @@ export default function VaultPage() {
         .best-hit-count {
           opacity: .7;
           font-size: .76rem;
+          font-weight: 900;
+        }
+		
+		.demo-notice {
+  margin-top: 14px;
+  border: 1px solid rgba(250, 204, 21, .35);
+  background: linear-gradient(135deg, rgba(250, 204, 21, .15), rgba(168, 85, 247, .12));
+  border-radius: 16px;
+  padding: 12px 14px;
+  font-weight: 950;
+  box-shadow: 0 14px 34px rgba(0,0,0,.22);
+}
+
+.demo-notice span {
+  display: block;
+  margin-top: 5px;
+  opacity: .85;
+  font-size: .82rem;
+  font-weight: 700;
+}
+
+.vault-message {
+  white-space: pre-line;
+  text-align: center;
+  padding: 28px;
+  border-radius: 22px;
+  margin: 20px 0;
+  border: 1px solid rgba(255,255,255,.15);
+  background: linear-gradient(
+    135deg,
+    rgba(124,58,237,.18),
+    rgba(255,255,255,.05)
+  );
+  box-shadow:
+    0 18px 48px rgba(0,0,0,.28),
+    0 0 24px rgba(168,85,247,.12);
+  font-weight: 800;
+  line-height: 1.7;
+}
+
+        .empty-state-card {
+          margin: 22px 0;
+          border: 1px solid rgba(255,255,255,.16);
+          background:
+            radial-gradient(circle at top left, rgba(250,204,21,.14), transparent 28%),
+            linear-gradient(135deg, rgba(124,58,237,.22), rgba(255,255,255,.06));
+          border-radius: 22px;
+          padding: 24px;
+          max-width: 680px;
+          box-shadow: 0 18px 56px rgba(0,0,0,.28), 0 0 28px rgba(168,85,247,.12);
+        }
+
+        .pack-gods-card {
+          border-color: rgba(250,204,21,.32);
+          background:
+            radial-gradient(circle at top left, rgba(250,204,21,.18), transparent 30%),
+            radial-gradient(circle at bottom right, rgba(168,85,247,.18), transparent 32%),
+            linear-gradient(135deg, rgba(124,58,237,.24), rgba(255,255,255,.06));
+        }
+
+        .empty-state-icon {
+          font-size: 2rem;
+          margin-bottom: 10px;
+        }
+
+        .empty-state-card h2 {
+          margin: 0 0 10px;
+          font-size: clamp(1.3rem, 4vw, 2rem);
+          font-weight: 950;
+          letter-spacing: .4px;
+        }
+
+        .empty-state-card p {
+          margin: 0;
+          max-width: 560px;
+          opacity: .86;
+          line-height: 1.55;
+          font-size: .95rem;
+        }
+
+        .empty-state-pill {
+          display: inline-block;
+          margin-top: 16px;
+          padding: 9px 14px;
+          border-radius: 999px;
+          border: 1px solid rgba(255,255,255,.22);
+          background: rgba(255,255,255,.08);
+          font-size: .82rem;
           font-weight: 900;
         }
 
@@ -1610,10 +1785,19 @@ export default function VaultPage() {
       `}</style>
 
       <div className="wrap">
-        <header className="header">
-          <h1>{collector?.whatnot_name || username}&apos;s Break Vault</h1>
-          <p>Every hit. Every break. One place to relive your Collectiverse journey.</p>
-        </header>
+       <header className="header">
+  <h1>{collector?.whatnot_name || username}&apos;s Break Vault</h1>
+  <p>Every hit. Every break. One place to relive your Collectiverse journey.</p>
+
+  {isDemoVault && (
+    <div className="demo-notice">
+      🎭 Demo Account
+      <span>
+        This is a sample Vault showing how Collectiverse Vault works. Demo hits are not included in real collector rankings.
+      </span>
+    </div>
+  )}
+</header>
 
         <div className="tabs">
           <button
@@ -1637,10 +1821,18 @@ export default function VaultPage() {
             Hall of Fame
           </button>
         </div>
+		
+		{message && (
+  <div className="vault-message">
+    {message}
+  </div>
+)}
 
-        {message && <p>{message}</p>}
+        {message && message !== 'Loading vault...' && <MessageCard />}
 
-        {tab === 'latest' && !message && (
+        {message === 'Loading vault...' && <p>Loading vault...</p>}
+
+        {tab === 'latest' && isReady && (
           <section>
             <h2 className="section-title">🌌 Break Archive</h2>
 
@@ -1693,7 +1885,7 @@ export default function VaultPage() {
           </section>
         )}
 
-        {tab === 'lifetime' && !message && (
+        {tab === 'lifetime' && isReady && (
           <section>
             <h2 className="section-title">🏆 Lifetime Collection</h2>
 
@@ -1912,7 +2104,7 @@ export default function VaultPage() {
           </section>
         )}
 
-        {tab === 'hall' && !message && (
+        {tab === 'hall' && isReady && (
           <section>
             <h2 className="section-title">🏛️ Hall of Fame</h2>
 
