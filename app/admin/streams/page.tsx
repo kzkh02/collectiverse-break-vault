@@ -48,7 +48,7 @@ type CalendarDay = {
 }
 
 const TAX_YEAR_START_MONTH = 3 // April, zero-indexed
-const TAX_YEAR_START_DAY = 5
+const TAX_YEAR_START_DAY = 10
 
 function money(value: number | string | null | undefined) {
   const number = Number(value || 0)
@@ -122,7 +122,7 @@ function getCalendarDays(year: number, monthIndex: number): CalendarDay[] {
 
   const days: CalendarDay[] = []
 
-  for (let i = 0; i < 42; i++) {
+  for (let i = 0; i < 35; i++) {
     const date = new Date(start)
     date.setDate(start.getDate() + i)
 
@@ -225,6 +225,12 @@ export default function StreamsPage() {
 
   const previousPayrun =
     payrunPeriods.find((period) => period.period === selectedPayrun.period - 1) || null
+
+  const visiblePayrunPeriods = payrunPeriods.filter(
+    (period) =>
+      period.period >= selectedPayrunPeriod - 1 &&
+      period.period <= selectedPayrunPeriod + 1
+  )
 
   const [newSetName, setNewSetName] = useState('')
   const [newSetType, setNewSetType] = useState<ItemType>('packs')
@@ -593,6 +599,39 @@ export default function StreamsPage() {
     }
   }
 
+  async function deleteBatch(batchId: string) {
+    const batch = batches.find((item) => item.id === batchId)
+
+    if (!batch) {
+      setMessage('Batch not found.')
+      return
+    }
+
+    if (Number(batch.packs_remaining) !== Number(batch.packs_bought)) {
+      setMessage('This batch has already been used in a stream, so it cannot be deleted safely.')
+      return
+    }
+
+    const confirmed = window.confirm(
+      'Delete this purchase batch? Only do this if it was entered by mistake.'
+    )
+
+    if (!confirmed) return
+
+    const { error } = await supabase
+      .from('pack_batches')
+      .delete()
+      .eq('id', batchId)
+
+    if (error) {
+      setMessage(error.message)
+      return
+    }
+
+    setMessage('Purchase batch deleted')
+    loadData()
+  }
+
   async function deleteStream(streamId: string) {
     const confirmed = window.confirm(
       'Delete this stream and restore the quantities back into their purchase batches?'
@@ -718,6 +757,23 @@ export default function StreamsPage() {
             font-weight: 800;
             margin-top: 6px;
           }
+
+          .eyebrow {
+            color: #fde68a;
+            font-size: .72rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            margin-bottom: 7px;
+            text-shadow: 0 0 18px rgba(250,204,21,.35);
+          }
+
+          .hero-panel {
+            background:
+              radial-gradient(circle at top left, rgba(250,204,21,.13), transparent 28%),
+              linear-gradient(135deg, rgba(124,58,237,.22), rgba(255,255,255,.055));
+          }
+
 
           .actions,
           .tabs,
@@ -968,11 +1024,67 @@ export default function StreamsPage() {
             gap: 12px;
           }
 
+          .payrun-strip {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+          }
+
+          .payrun-card {
+            border: 1px solid rgba(255,255,255,.14);
+            background:
+              radial-gradient(circle at top left, rgba(192,132,252,.12), transparent 40%),
+              rgba(255,255,255,.055);
+            color: white;
+            border-radius: 20px;
+            padding: 16px;
+            text-align: left;
+            cursor: pointer;
+          }
+
+          .payrun-card.active {
+            border-color: rgba(250,204,21,.45);
+            background:
+              radial-gradient(circle at top left, rgba(250,204,21,.16), transparent 38%),
+              rgba(124,58,237,.18);
+            box-shadow: 0 12px 32px rgba(124,58,237,.20);
+          }
+
+          .payrun-card-title {
+            font-weight: 950;
+            font-size: 1rem;
+          }
+
+          .payrun-card-date {
+            color: rgba(255,255,255,.64);
+            font-size: .82rem;
+            font-weight: 850;
+            margin-top: 4px;
+          }
+
+          .payrun-card-profit {
+            color: #bbf7d0;
+            font-size: 1.45rem;
+            font-weight: 950;
+            margin-top: 12px;
+          }
+
+          .payrun-card-meta {
+            color: rgba(255,255,255,.68);
+            font-size: .82rem;
+            font-weight: 850;
+            margin-top: 4px;
+          }
+
+          .compact-select {
+            max-width: 260px;
+          }
+
           @media (max-width: 920px) {
             .page { padding: 14px; }
             .top, .calendar-head, .payrun-head { flex-direction: column; align-items: flex-start; }
             .weekday-row { display: none; }
-            .calendar-grid { grid-template-columns: 1fr; }
+            .calendar-grid, .payrun-strip { grid-template-columns: 1fr; }
             .form-grid, .product-row, .table-row, .payrun-row { grid-template-columns: 1fr; }
           }
         `}</style>
@@ -1216,7 +1328,15 @@ export default function StreamsPage() {
                       <div>{batch.packs_remaining}/{batch.packs_bought} left</div>
                       <div>Total {money(batch.total_cost)}</div>
                       <div>{money(batch.cost_per_pack)} / unit</div>
-                      <div></div>
+                      <div>
+                        {Number(batch.packs_remaining) === Number(batch.packs_bought) ? (
+                          <button className="button danger" onClick={() => deleteBatch(batch.id)}>
+                            Delete Batch
+                          </button>
+                        ) : (
+                          <span className="muted">In use</span>
+                        )}
+                      </div>
                       <div></div>
                     </div>
                   ))}
@@ -1227,23 +1347,24 @@ export default function StreamsPage() {
 
           {tab === 'performance' && (
             <>
-              <section className="panel">
+              <section className="panel hero-panel">
                 <div className="payrun-head">
                   <div>
-                    <h2>Payrun Performance</h2>
+                    <div className="eyebrow">Fortnightly Payrun</div>
+                    <h2>Performance</h2>
                     <div className="muted">
-                      Tax year {getTaxYearLabel(taxYearStart)} · select any of the 26 fortnightly payruns.
+                      Tax year {getTaxYearLabel(taxYearStart)} · {selectedPayrun.label} · {shortDate(selectedPayrun.start)} → {shortDate(selectedPayrun.end)}
                     </div>
                   </div>
 
                   <div className="row-actions">
-                    <select className="select" value={taxYearStart} onChange={(e) => setTaxYearStart(e.target.value)}>
-                      <option value="2026-04-05">2026/2027</option>
-                      <option value="2025-04-05">2025/2026</option>
-                      <option value="2024-04-05">2024/2025</option>
+                    <select className="select compact-select" value={taxYearStart} onChange={(e) => setTaxYearStart(e.target.value)}>
+                      <option value="2026-04-10">2026/2027</option>
+                      <option value="2025-04-10">2025/2026</option>
+                      <option value="2024-04-10">2024/2025</option>
                     </select>
 
-                    <select className="select" value={selectedPayrunPeriod} onChange={(e) => setSelectedPayrunPeriod(Number(e.target.value))}>
+                    <select className="select compact-select" value={selectedPayrunPeriod} onChange={(e) => setSelectedPayrunPeriod(Number(e.target.value))}>
                       {payrunPeriods.map((period) => (
                         <option key={period.period} value={period.period}>
                           {period.label} · {shortDate(period.start)} - {shortDate(period.end)}
@@ -1254,30 +1375,62 @@ export default function StreamsPage() {
                 </div>
 
                 <div className="stats-grid">
-                  <StatCard label={`${selectedPayrun.label} Sales`} value={money(currentPayrun.sales)} sub={`${selectedPayrun.start} → ${selectedPayrun.end}`} />
-                  <StatCard label="After Fees" value={money(currentPayrun.salesAfterFees)} />
-                  <StatCard label="Profit" value={money(currentPayrun.profit)} />
-                  <StatCard label="Vs Previous" value={percent(payrunChange)} />
+                  <StatCard label="Average Profit / Day" value={money(currentPayrun.profit / 14)} sub="Across the full payrun" />
+                  <StatCard label="Average Quantity / Day" value={(currentPayrun.quantity / 14).toFixed(1)} sub={`${currentPayrun.quantity} total quantity`} />
+                  <StatCard label="Average Profit / Stream" value={money(currentPayrun.count ? currentPayrun.profit / currentPayrun.count : 0)} sub={`${currentPayrun.count} stream(s)`} />
+                  <StatCard label="Vs Previous Payrun" value={percent(payrunChange)} sub={previousPayrun ? `${previousPayrun.label}: ${money(previousPayrunTotals.profit)}` : 'No previous payrun'} />
                 </div>
               </section>
 
               <section className="panel">
-                <h2>Payrun History</h2>
-                <div className="table">
-                  {payrunHistory.map((period) => (
-                    <button
-                      key={period.period}
-                      className={`payrun-row ${selectedPayrunPeriod === period.period ? 'active' : ''}`}
-                      onClick={() => setSelectedPayrunPeriod(period.period)}
-                    >
-                      <div className="table-title">{period.label}</div>
-                      <div className="muted">{shortDate(period.start)} → {shortDate(period.end)}</div>
-                      <div>Sales {money(period.sales)}</div>
-                      <div>After Fees {money(period.salesAfterFees)}</div>
-                      <div>Qty {period.quantity}</div>
-                      <div>Profit {money(period.profit)}</div>
-                    </button>
-                  ))}
+                <h2>Payrun Snapshot</h2>
+                <div className="payrun-strip">
+                  {visiblePayrunPeriods.map((period) => {
+                    const totals = payrunHistory.find((item) => item.period === period.period)
+                    const isActive = selectedPayrunPeriod === period.period
+
+                    return (
+                      <button
+                        key={period.period}
+                        className={`payrun-card ${isActive ? 'active' : ''}`}
+                        onClick={() => setSelectedPayrunPeriod(period.period)}
+                      >
+                        <div className="payrun-card-title">{period.label}</div>
+                        <div className="payrun-card-date">{shortDate(period.start)} → {shortDate(period.end)}</div>
+                        <div className="payrun-card-profit">{money(totals?.profit || 0)}</div>
+                        <div className="payrun-card-meta">
+                          Sales {money(totals?.sales || 0)} · Qty {totals?.quantity || 0}
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+
+                <div className="row-actions" style={{ marginTop: 14 }}>
+                  <button
+                    className="button"
+                    disabled={selectedPayrunPeriod <= 1}
+                    onClick={() => setSelectedPayrunPeriod(Math.max(1, selectedPayrunPeriod - 1))}
+                  >
+                    Previous Payrun
+                  </button>
+                  <button
+                    className="button"
+                    disabled={selectedPayrunPeriod >= 26}
+                    onClick={() => setSelectedPayrunPeriod(Math.min(26, selectedPayrunPeriod + 1))}
+                  >
+                    Next Payrun
+                  </button>
+                </div>
+              </section>
+
+              <section className="panel">
+                <h2>Selected Payrun Totals</h2>
+                <div className="stats-grid">
+                  <StatCard label="Sales" value={money(currentPayrun.sales)} />
+                  <StatCard label="After Fees" value={money(currentPayrun.salesAfterFees)} />
+                  <StatCard label="Quantity Used" value={String(currentPayrun.quantity)} />
+                  <StatCard label="Profit" value={money(currentPayrun.profit)} />
                 </div>
               </section>
 
