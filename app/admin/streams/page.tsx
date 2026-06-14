@@ -1177,36 +1177,6 @@ export default function StreamsPage() {
                   })}
                 </div>
               </section>
-
-              <section className="panel">
-                <h2>{fullDate(selectedDate)}</h2>
-
-                <div className="stats-grid">
-                  <StatCard label="Sales" value={money(selectedDayTotals.sales)} />
-                  <StatCard label="After Fees" value={money(selectedDayTotals.salesAfterFees)} />
-                  <StatCard label="Quantity" value={String(selectedDayTotals.quantity)} />
-                  <StatCard label="Profit" value={money(selectedDayTotals.profit)} />
-                </div>
-
-                <div className="table">
-                  {selectedDayStreams.map((stream) => (
-                    <div className="table-row" key={stream.id}>
-                      <div>
-                        <div className="table-title">Stream {stream.stream_slot}</div>
-                        <div className="muted">{stream.stream_date}</div>
-                      </div>
-                      <div>Sales {money(stream.sales)}</div>
-                      <div>After Fees {money(stream.sales_after_fees)}</div>
-                      <div>Qty {stream.packs_used}</div>
-                      <div>Cost {money(stream.total_cost)}</div>
-                      <div>Profit {money(stream.profit)}</div>
-                      <button className="button danger" onClick={() => deleteStream(stream.id)}>Delete</button>
-                    </div>
-                  ))}
-
-                  {selectedDayStreams.length === 0 && <div className="muted">No streams recorded for this day.</div>}
-                </div>
-              </section>
             </>
           )}
 
@@ -1269,35 +1239,38 @@ export default function StreamsPage() {
                 </div>
               </div>
             </section>
+          )}
 
-              <section className="panel">
-                <h2>Testing Tools</h2>
-                <div className="muted" style={{ marginBottom: 12 }}>
-                  Use this while testing to delete streams and restore their quantities back into purchase batches.
-                </div>
 
-                <div className="table">
-                  {streams.slice(0, 20).map((stream) => (
-                    <div className="table-row" key={stream.id}>
-                      <div>
-                        <div className="table-title">{fullDate(stream.stream_date)}</div>
-                        <div className="muted">Stream {stream.stream_slot}</div>
-                      </div>
-                      <div>Sales {money(stream.sales)}</div>
-                      <div>After Fees {money(stream.sales_after_fees)}</div>
-                      <div>Qty {stream.packs_used}</div>
-                      <div>Profit {money(stream.profit)}</div>
-                      <button className="button danger" onClick={() => deleteStream(stream.id)}>
-                        Delete Stream
-                      </button>
+          {tab === 'entry' && (
+            <section className="panel">
+              <h2>Testing Tools</h2>
+              <div className="muted" style={{ marginBottom: 12 }}>
+                Delete test streams and restore their quantities back into purchase batches.
+              </div>
+
+              <div className="table">
+                {streams.slice(0, 20).map((stream) => (
+                  <div className="table-row" key={stream.id}>
+                    <div>
+                      <div className="table-title">{fullDate(stream.stream_date)}</div>
+                      <div className="muted">Stream {stream.stream_slot}</div>
                     </div>
-                  ))}
+                    <div>Sales {money(stream.sales)}</div>
+                    <div>After Fees {money(stream.sales_after_fees)}</div>
+                    <div>Qty {stream.packs_used}</div>
+                    <div>Profit {money(stream.profit)}</div>
+                    <button className="button danger" onClick={() => deleteStream(stream.id)}>
+                      Delete Stream
+                    </button>
+                  </div>
+                ))}
 
-                  {streams.length === 0 && (
-                    <div className="muted">No streams to delete yet.</div>
-                  )}
-                </div>
-
+                {streams.length === 0 && (
+                  <div className="muted">No streams to delete yet.</div>
+                )}
+              </div>
+            </section>
           )}
 
           {tab === 'purchased' && (
@@ -1480,16 +1453,6 @@ export default function StreamsPage() {
                   >
                     Next Payrun
                   </button>
-                </div>
-              </section>
-
-              <section className="panel">
-                <h2>Selected Payrun Totals</h2>
-                <div className="stats-grid">
-                  <StatCard label="Sales" value={money(currentPayrun.sales)} />
-                  <StatCard label="After Fees" value={money(currentPayrun.salesAfterFees)} />
-                  <StatCard label="Quantity Used" value={String(currentPayrun.quantity)} />
-                  <StatCard label="Profit" value={money(currentPayrun.profit)} />
                 </div>
               </section>
 
