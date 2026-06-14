@@ -244,16 +244,10 @@ export default function VaultPage() {
         .select('*')
         .eq('collector_id', collectorData.id)
 
-     if (!allEntries || allEntries.length === 0) {
-  setMessage(`
-🚀 No Collectiverse Vault Found
-
-Looks like this collector hasn't joined a Collectiverse break yet.
-
-Once they jump into their first break, their Vault will be waiting for them here.
-  `)
-  return
-}
+      if (!allEntries || allEntries.length === 0) {
+        setMessage(MESSAGE_NO_ENTRIES)
+        return
+      }
 
       const breakIds = [
         ...new Set(allEntries.map((entry) => entry.break_id).filter(Boolean)),
@@ -291,11 +285,9 @@ Once they jump into their first break, their Vault will be waiting for them here
       setHits(hitsWithBreaks)
 
       if (hitsWithBreaks.length === 0) {
-  setMessage(
-    "🎲 THE PACK GODS WERE NOT WITH YOU... YET\n\nYou've joined the Collectiverse journey, but your first hit is still out there waiting.\n\nEvery legend starts somewhere.\n\n🍀 First Hit Incoming"
-  )
-  return
-}
+        setMessage(MESSAGE_NO_HITS)
+        return
+      }
 
       const { data: allHitEntries } = await supabase
         .from('entries')
@@ -580,9 +572,15 @@ Once they jump into their first break, their Vault will be waiting for them here
   function HitList({ items }: { items: any[] }) {
     if (items.length === 0) {
       return (
-        <p style={{ opacity: 0.75 }}>
-          No hits recorded here yet. Check back after the stream.
-        </p>
+        <div className="empty-state-card pack-gods-card">
+          <div className="empty-state-icon">🎲</div>
+          <h2>The Pack Gods Were Not With You... Yet</h2>
+          <p>
+            This collector joined this break, but didn&apos;t hit on this date.
+            Every legend starts somewhere — the next big pull could be waiting in the next stream.
+          </p>
+          <div className="empty-state-pill">🍀 First Hit Incoming</div>
+        </div>
       )
     }
 
