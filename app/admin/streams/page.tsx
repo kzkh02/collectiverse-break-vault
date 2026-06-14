@@ -33,6 +33,7 @@ type StreamRow = {
   sales: number
   sales_after_fees: number
   packs_used: number
+  packs_only_used?: number
   total_cost: number
   profit: number
 }
@@ -181,12 +182,13 @@ function sumStreams(streams: StreamRow[]) {
       total.sales += Number(stream.sales || 0)
       total.salesAfterFees += Number(stream.sales_after_fees || 0)
       total.quantity += Number(stream.packs_used || 0)
+      total.packsOnly += Number(stream.packs_only_used || 0)
       total.cost += Number(stream.total_cost || 0)
       total.profit += Number(stream.profit || 0)
       total.count += 1
       return total
     },
-    { sales: 0, salesAfterFees: 0, quantity: 0, cost: 0, profit: 0, count: 0 }
+    { sales: 0, salesAfterFees: 0, quantity: 0, packsOnly: 0, cost: 0, profit: 0, count: 0 }
   )
 }
 
@@ -352,22 +354,42 @@ export default function StreamsPage() {
   async function loadData() {
     setMessage('Loading...')
 
-    const [setsResult, batchesResult, streamsResult] = await Promise.all([
+    const [setsResult, batchesResult, streamsResult, productsResult] = await Promise.all([
       supabase.from('stream_sets').select('*').order('name'),
       supabase
         .from('pack_batches')
         .select('*, stream_sets(name, item_type)')
         .order('purchase_date', { ascending: false }),
       supabase.from('streams').select('*').order('stream_date', { ascending: false }),
+      supabase
+        .from('stream_products')
+        .select('stream_id, packs_used, stream_sets(item_type)'),
     ])
 
     if (setsResult.error) return setMessage(setsResult.error.message)
     if (batchesResult.error) return setMessage(batchesResult.error.message)
     if (streamsResult.error) return setMessage(streamsResult.error.message)
+    if (productsResult.error) return setMessage(productsResult.error.message)
+
+    const packsOnlyByStream = new Map<string, number>()
+
+    ;(productsResult.data || []).forEach((item: any) => {
+      const itemType = item.stream_sets?.item_type || 'packs'
+
+      if (itemType !== 'packs') return
+
+      const current = packsOnlyByStream.get(item.stream_id) || 0
+      packsOnlyByStream.set(item.stream_id, current + Number(item.packs_used || 0))
+    })
+
+    const streamsWithPackTotals = ((streamsResult.data || []) as StreamRow[]).map((stream) => ({
+      ...stream,
+      packs_only_used: packsOnlyByStream.get(stream.id) || 0,
+    }))
 
     setSets((setsResult.data || []) as StreamSet[])
     setBatches((batchesResult.data || []) as PackBatch[])
-    setStreams((streamsResult.data || []) as StreamRow[])
+    setStreams(streamsWithPackTotals)
     setMessage('')
   }
 
@@ -1225,7 +1247,7 @@ export default function StreamsPage() {
                     </div>
 
                     <div className="field">
-                      <label>Quantity Used</label>
+                      <label>Packs Used</label>
                       <input className="input" type="number" value={row.quantity_used} onChange={(e) => updateProductRow(index, 'quantity_used', e.target.value)} />
                     </div>
 
@@ -1393,7 +1415,7 @@ export default function StreamsPage() {
 
                 <div className="stats-grid">
                   <StatCard label="Average Profit / Stream" value={money(currentPayrun.count ? currentPayrun.profit / currentPayrun.count : 0)} sub={`${currentPayrun.count} stream(s)`} />
-                  <StatCard label="Average Quantity / Stream" value={currentPayrun.count ? (currentPayrun.quantity / currentPayrun.count).toFixed(1) : '0.0'} sub={`${currentPayrun.quantity} total used`} />
+                  <StatCard label="Average Packs / Stream" value={currentPayrun.count ? (currentPayrun.packsOnly / currentPayrun.count).toFixed(1) : '0.0'} sub={`${currentPayrun.packsOnly} packs used`} />
                   <StatCard label="Average Sales / Stream" value={money(currentPayrun.count ? currentPayrun.salesAfterFees / currentPayrun.count : 0)} sub="After fees" />
                   <StatCard label="Vs Previous Payrun" value={percent(payrunChange)} sub={previousPayrun ? `${previousPayrun.label}: ${money(previousPayrunTotals.profit)}` : 'No previous payrun'} />
                 </div>
@@ -1425,8 +1447,8 @@ export default function StreamsPage() {
                             <strong>{money(totals?.salesAfterFees || 0)}</strong>
                           </div>
                           <div>
-                            <span>Qty</span>
-                            <strong>{totals?.quantity || 0}</strong>
+                            <span>Packs</span>
+                            <strong>{totals?.packsOnly || 0}</strong>
                           </div>
                           <div>
                             <span>Profit</span>
@@ -1475,7 +1497,7 @@ export default function StreamsPage() {
                       </div>
                       <div>Sales {money(item.sales)}</div>
                       <div>After Fees {money(item.salesAfterFees)}</div>
-                      <div>Qty {item.quantity}</div>
+                      <div>Packs {item.packsOnly}</div>
                       <div>Profit {money(item.profit)}</div>
                       <div></div>
                     </div>
@@ -1488,7 +1510,7 @@ export default function StreamsPage() {
                 <div className="stats-grid">
                   <StatCard label="All-Time Sales" value={money(allTime.sales)} />
                   <StatCard label="All-Time After Fees" value={money(allTime.salesAfterFees)} />
-                  <StatCard label="All-Time Quantity" value={String(allTime.quantity)} />
+                  <StatCard label="All-Time Packs" value={String(allTime.packsOnly)} />
                   <StatCard label="Average Stream Profit" value={money(allTime.count ? allTime.profit / allTime.count : 0)} />
                 </div>
               </section>
