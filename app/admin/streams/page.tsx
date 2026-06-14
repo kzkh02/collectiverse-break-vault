@@ -930,6 +930,7 @@ export default function StreamsPage() {
             color: rgba(255,255,255,.82);
             font-weight: 850;
             margin-top: 5px;
+            letter-spacing: .1px;
           }
 
           .day-profit {
@@ -1062,18 +1063,32 @@ export default function StreamsPage() {
             margin-top: 4px;
           }
 
-          .payrun-card-profit {
-            color: #bbf7d0;
-            font-size: 1.45rem;
-            font-weight: 950;
-            margin-top: 12px;
+          .payrun-card-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+            margin-top: 14px;
           }
 
-          .payrun-card-meta {
-            color: rgba(255,255,255,.68);
-            font-size: .82rem;
-            font-weight: 850;
+          .payrun-card-grid span {
+            display: block;
+            color: rgba(255,255,255,.58);
+            font-size: .68rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .8px;
+          }
+
+          .payrun-card-grid strong {
+            display: block;
             margin-top: 4px;
+            color: white;
+            font-size: .98rem;
+            font-weight: 950;
+          }
+
+          .profit-text {
+            color: #bbf7d0 !important;
           }
 
           .compact-select {
@@ -1092,9 +1107,9 @@ export default function StreamsPage() {
         <div className="wrap">
           <header className="top">
             <div>
-              <h1>Stream Calendar</h1>
+              <h1>Operations</h1>
               <div className="sub">
-                Calendar, purchases, FIFO costing and fortnightly payrun performance.
+                Purchases, stream sales, FIFO costing and payrun performance.
               </div>
             </div>
 
@@ -1375,9 +1390,9 @@ export default function StreamsPage() {
                 </div>
 
                 <div className="stats-grid">
-                  <StatCard label="Average Profit / Day" value={money(currentPayrun.profit / 14)} sub="Across the full payrun" />
-                  <StatCard label="Average Quantity / Day" value={(currentPayrun.quantity / 14).toFixed(1)} sub={`${currentPayrun.quantity} total quantity`} />
                   <StatCard label="Average Profit / Stream" value={money(currentPayrun.count ? currentPayrun.profit / currentPayrun.count : 0)} sub={`${currentPayrun.count} stream(s)`} />
+                  <StatCard label="Average Quantity / Stream" value={currentPayrun.count ? (currentPayrun.quantity / currentPayrun.count).toFixed(1) : '0.0'} sub={`${currentPayrun.quantity} total used`} />
+                  <StatCard label="Average Sales / Stream" value={money(currentPayrun.count ? currentPayrun.salesAfterFees / currentPayrun.count : 0)} sub="After fees" />
                   <StatCard label="Vs Previous Payrun" value={percent(payrunChange)} sub={previousPayrun ? `${previousPayrun.label}: ${money(previousPayrunTotals.profit)}` : 'No previous payrun'} />
                 </div>
               </section>
@@ -1397,9 +1412,24 @@ export default function StreamsPage() {
                       >
                         <div className="payrun-card-title">{period.label}</div>
                         <div className="payrun-card-date">{shortDate(period.start)} → {shortDate(period.end)}</div>
-                        <div className="payrun-card-profit">{money(totals?.profit || 0)}</div>
-                        <div className="payrun-card-meta">
-                          Sales {money(totals?.sales || 0)} · Qty {totals?.quantity || 0}
+
+                        <div className="payrun-card-grid">
+                          <div>
+                            <span>Sales</span>
+                            <strong>{money(totals?.sales || 0)}</strong>
+                          </div>
+                          <div>
+                            <span>After Fees</span>
+                            <strong>{money(totals?.salesAfterFees || 0)}</strong>
+                          </div>
+                          <div>
+                            <span>Qty</span>
+                            <strong>{totals?.quantity || 0}</strong>
+                          </div>
+                          <div>
+                            <span>Profit</span>
+                            <strong className="profit-text">{money(totals?.profit || 0)}</strong>
+                          </div>
                         </div>
                       </button>
                     )
