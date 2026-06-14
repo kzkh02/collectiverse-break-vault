@@ -590,12 +590,10 @@ export default function VaultPage() {
       return (
         <div className="empty-state-card pack-gods-card">
           <div className="empty-state-icon">🎲</div>
-          <h2>The Pack Gods Were Not With You... Yet</h2>
+          <h2>The Pack Gods Were Not With You Today</h2>
           <p>
-            You entered a Collectiverse break on this date, but your first hit from this stream
-            is still out there waiting. Every legend starts somewhere.
+            You entered this break, but nothing found its way into your Vault this time.
           </p>
-          <div className="empty-state-pill">🍀 First Hit Incoming</div>
         </div>
       )
     }
@@ -655,12 +653,10 @@ function MessageCard() {
     return (
       <div className="empty-state-card pack-gods-card">
         <div className="empty-state-icon">🎲</div>
-        <h2>The Pack Gods Were Not With You... Yet</h2>
+        <h2>The Pack Gods Were Not With You Today</h2>
         <p>
-          You&apos;ve joined the Collectiverse journey, but your first hit is still out there waiting.
-          Every legend starts somewhere. We&apos;ll be ready when that first big pull lands.
+          You&apos;ve entered Collectiverse breaks, but nothing has found its way into your Vault yet.
         </p>
-        <div className="empty-state-pill">🍀 First Hit Incoming</div>
       </div>
     )
   }
