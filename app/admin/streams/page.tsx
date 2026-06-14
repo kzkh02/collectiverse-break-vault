@@ -1269,6 +1269,35 @@ export default function StreamsPage() {
                 </div>
               </div>
             </section>
+
+              <section className="panel">
+                <h2>Testing Tools</h2>
+                <div className="muted" style={{ marginBottom: 12 }}>
+                  Use this while testing to delete streams and restore their quantities back into purchase batches.
+                </div>
+
+                <div className="table">
+                  {streams.slice(0, 20).map((stream) => (
+                    <div className="table-row" key={stream.id}>
+                      <div>
+                        <div className="table-title">{fullDate(stream.stream_date)}</div>
+                        <div className="muted">Stream {stream.stream_slot}</div>
+                      </div>
+                      <div>Sales {money(stream.sales)}</div>
+                      <div>After Fees {money(stream.sales_after_fees)}</div>
+                      <div>Qty {stream.packs_used}</div>
+                      <div>Profit {money(stream.profit)}</div>
+                      <button className="button danger" onClick={() => deleteStream(stream.id)}>
+                        Delete Stream
+                      </button>
+                    </div>
+                  ))}
+
+                  {streams.length === 0 && (
+                    <div className="muted">No streams to delete yet.</div>
+                  )}
+                </div>
+
           )}
 
           {tab === 'purchased' && (
