@@ -202,6 +202,7 @@ export default function VaultPage() {
   const [selectedDate, setSelectedDate] = useState(todayDate())
   const [collector, setCollector] = useState<any>(null)
   const [hits, setHits] = useState<any[]>([])
+  const [enteredBreakDates, setEnteredBreakDates] = useState<string[]>([])
   const [hallOfFame, setHallOfFame] = useState<HallOfFameCollector[]>([])
   const [bestHitIndex, setBestHitIndex] = useState(0)
   const [message, setMessage] = useState('Loading vault...')
@@ -232,6 +233,7 @@ export default function VaultPage() {
       if (!collectorData) {
         setCollector(null)
         setHits([])
+        setEnteredBreakDates([])
         setHallOfFame([])
         setMessage(MESSAGE_NO_COLLECTOR)
         return
@@ -267,6 +269,16 @@ export default function VaultPage() {
       ;(breaks || []).forEach((breakItem) => {
         breakMap[breakItem.id] = breakItem
       })
+
+      const allEnteredDates = [
+        ...new Set(
+          (allEntries || [])
+            .map((entry) => dateValue(breakMap[entry.break_id]?.stream_datetime || null))
+            .filter(Boolean)
+        ),
+      ]
+
+      setEnteredBreakDates(allEnteredDates)
 
       const { data: allHits } = await supabase
         .from('entries')
@@ -456,13 +468,11 @@ export default function VaultPage() {
     }
   }, [bestHitIndex, bestHits.length])
 
-  const enteredBreakDates = [
-    ...new Set(hits.map((hit) => dateValue(hit.stream_datetime))),
-  ]
-
   const selectedDateHits = hits.filter((hit) =>
     hit.stream_datetime?.startsWith(selectedDate)
   )
+
+  const selectedDateEntered = enteredBreakDates.includes(selectedDate)
 
   const selectedMonth = new Date(selectedDate)
   const year = selectedMonth.getFullYear()
@@ -569,17 +579,36 @@ export default function VaultPage() {
     )
   }
 
-  function HitList({ items }: { items: any[] }) {
-    if (items.length === 0) {
+  function HitList({
+    items,
+    enteredBreak,
+  }: {
+    items: any[]
+    enteredBreak: boolean
+  }) {
+    if (items.length === 0 && enteredBreak) {
       return (
         <div className="empty-state-card pack-gods-card">
           <div className="empty-state-icon">🎲</div>
           <h2>The Pack Gods Were Not With You... Yet</h2>
           <p>
-            This collector joined this break, but didn&apos;t hit on this date.
-            Every legend starts somewhere — the next big pull could be waiting in the next stream.
+            You entered a Collectiverse break on this date, but your first hit from this stream
+            is still out there waiting. Every legend starts somewhere.
           </p>
           <div className="empty-state-pill">🍀 First Hit Incoming</div>
+        </div>
+      )
+    }
+
+    if (items.length === 0 && !enteredBreak) {
+      return (
+        <div className="empty-state-card">
+          <div className="empty-state-icon">📭</div>
+          <h2>No Break Entries</h2>
+          <p>
+            You did not enter any Collectiverse breaks on this date.
+            Pick another highlighted date from your Break Archive.
+          </p>
         </div>
       )
     }
@@ -1887,7 +1916,7 @@ function MessageCard() {
 
             <h3 className="subsection-title">Your Hits From This Date</h3>
 
-            <HitList items={selectedDateHits} />
+            <HitList items={selectedDateHits} enteredBreak={selectedDateEntered} />
           </section>
         )}
 
