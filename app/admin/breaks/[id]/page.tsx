@@ -66,6 +66,14 @@ function tierClass(tier: string | null) {
   return `tier-${tier}`
 }
 
+function baseSpotName(value: string) {
+  return value.replace(/ · Extra Hit \d+$/i, '').trim()
+}
+
+function displayHitName(entry: EntryRow) {
+  return entry.hit_name || entry.spot_name
+}
+
 export default function BreakPage() {
   const params = useParams()
   const router = useRouter()
@@ -86,26 +94,32 @@ export default function BreakPage() {
   const breakStatus = breakData?.status || 'open'
 
   const collectorSummary = useMemo(() => {
-    const summary = new Map<string, { name: string; spots: number; hits: number }>()
+    const summary = new Map<string, { name: string; spots: Set<string>; hits: number }>()
 
     entries.forEach((entry) => {
       const key = entry.collector_id
       const current = summary.get(key) || {
         name: entry.collector_name || 'Unknown',
-        spots: 0,
+        spots: new Set<string>(),
         hits: 0,
       }
 
-      current.spots += 1
+      current.spots.add(baseSpotName(entry.spot_name))
       if (entry.is_hit) current.hits += 1
       summary.set(key, current)
     })
 
-    return Array.from(summary.values()).sort((a, b) => {
-      if (b.hits !== a.hits) return b.hits - a.hits
-      if (b.spots !== a.spots) return b.spots - a.spots
-      return a.name.localeCompare(b.name)
-    })
+    return Array.from(summary.values())
+      .map((item) => ({
+        name: item.name,
+        spots: item.spots.size,
+        hits: item.hits,
+      }))
+      .sort((a, b) => {
+        if (b.hits !== a.hits) return b.hits - a.hits
+        if (b.spots !== a.spots) return b.spots - a.spots
+        return a.name.localeCompare(b.name)
+      })
   }, [entries])
 
   const filteredEntries = useMemo(() => {
@@ -115,6 +129,7 @@ export default function BreakPage() {
       const matchesSearch =
         !query ||
         entry.spot_name.toLowerCase().includes(query) ||
+        String(entry.hit_name || '').toLowerCase().includes(query) ||
         String(entry.collector_name || '').toLowerCase().includes(query)
 
       const matchesFilter =
@@ -221,6 +236,90 @@ export default function BreakPage() {
     )
 
     setMessage('Saved')
+  }
+
+  async function updateHitName(entryId: string, hitName: string) {
+    const safeName = hitName.trim()
+
+    const { error } = await supabase
+      .from('entries')
+      .update({
+        hit_name: safeName || null,
+      })
+      .eq('id', entryId)
+
+    if (error) {
+      setMessage(error.message)
+      return
+    }
+
+    setEntries((current) =>
+      current.map((entry) =>
+        entry.id === entryId
+          ? {
+              ...entry,
+              hit_name: safeName || null,
+            }
+          : entry
+      )
+    )
+
+    setMessage('Hit name saved')
+  }
+
+  async function addExtraHit(entry: EntryRow) {
+    const hitName = window.prompt('What card did they hit? Example: Hawlucha')
+    if (!hitName?.trim()) return
+
+    const tierInput = window.prompt(
+      'What tier? Use: reverse_holo, ex, sr, ir, mar, gold, sir',
+      bulkTier || 'ex'
+    )
+
+    const tier = String(tierInput || '').trim().toLowerCase() as TierId
+
+    if (!tiers.some((item) => item.id === tier) || tier === '') {
+      setMessage('Invalid tier. Use reverse_holo, ex, sr, ir, mar, gold or sir.')
+      return
+    }
+
+    const extraCount =
+      entries.filter(
+        (item) =>
+          item.collector_id === entry.collector_id &&
+          baseSpotName(item.spot_name) === baseSpotName(entry.spot_name) &&
+          item.spot_name.includes('· Extra Hit')
+      ).length + 1
+
+    const { data, error } = await supabase
+      .from('entries')
+      .insert({
+        break_id: entry.break_id,
+        collector_id: entry.collector_id,
+        spot_name: `${baseSpotName(entry.spot_name)} · Extra Hit ${extraCount}`,
+        is_hit: true,
+        hit_name: hitName.trim(),
+        hit_tier: tier,
+        revealed_at: new Date().toISOString(),
+        featured_hit: false,
+      })
+      .select('*')
+      .single()
+
+    if (error || !data) {
+      setMessage(error?.message || 'Could not add extra hit.')
+      return
+    }
+
+    setEntries((current) => [
+      ...current,
+      {
+        ...(data as EntryRow),
+        collector_name: entry.collector_name,
+      },
+    ])
+
+    setMessage('Extra hit added')
   }
 
   async function applyBulkTier(entry: EntryRow) {
@@ -798,8 +897,11 @@ export default function BreakPage() {
               onClick={() => applyBulkTier(entry)}
             >
               <div>
-                <div className="spot-name">{entry.spot_name}</div>
-                <div className="spot-owner">Owner: {entry.collector_name}</div>
+                <div className="spot-name">{displayHitName(entry)}</div>
+                <div className="spot-owner">
+                  Owner: {entry.collector_name}
+                  {entry.hit_name && entry.hit_name !== entry.spot_name ? ` · Spot: ${baseSpotName(entry.spot_name)}` : ''}
+                </div>
 
                 <div className="status-row">
                   <span className="tier-pill">
@@ -826,10 +928,30 @@ export default function BreakPage() {
                 </select>
 
                 {entry.is_hit && (
-                  <button className="admin-button gold" onClick={() => featureHit(entry.id)}>
-                    ⭐ Feature
-                  </button>
+                  <>
+                    <input
+                      className="tier-select"
+                      value={entry.hit_name || entry.spot_name}
+                      onChange={(event) =>
+                        setEntries((current) =>
+                          current.map((item) =>
+                            item.id === entry.id ? { ...item, hit_name: event.target.value } : item
+                          )
+                        )
+                      }
+                      onBlur={(event) => updateHitName(entry.id, event.target.value)}
+                      placeholder="Hit card name"
+                    />
+
+                    <button className="admin-button gold" onClick={() => featureHit(entry.id)}>
+                      ⭐ Feature
+                    </button>
+                  </>
                 )}
+
+                <button className="admin-button" onClick={() => addExtraHit(entry)}>
+                  + Extra Hit
+                </button>
               </div>
             </div>
           ))}

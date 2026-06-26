@@ -569,7 +569,7 @@ export default function VaultPage() {
             <div className="break-number">BREAK {breakInfo.breakNumber}</div>
           )}
 
-          <h3>{hit.spot_name}</h3>
+          <h3>{hit.hit_name || hit.spot_name}</h3>
 
           <div className={`hit-badge badge-${hit.hit_tier}`}>
             {tierLabels[hit.hit_tier] || hit.hit_tier}
