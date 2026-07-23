@@ -175,7 +175,7 @@ function isGiveawayType(value?: string) {
 
 function getSinglesBreakdown(sale: SinglesSale, sealedBatches: SealedBatch[]) {
   const fallback = { cards: num(sale.quantity || 1), sealed: 0 }
-  const match = sale.notes?.match(/\[\[sale_meta:(.*?)\]\]/s)
+  const match = sale.notes?.match(/\[\[sale_meta:([\s\S]*?)\]\]/)
   if (!match) return fallback
 
   try {
