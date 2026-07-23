@@ -41,10 +41,19 @@ export default function AdminPage() {
     router.push('/admin/login')
   }
 
+  const isOwner = email.trim().toLowerCase() === 'collectiversetcg@gmail.com'
+
   const sections = [
     {
       title: 'Operations',
       cards: [
+        ...(isOwner ? [{
+          href: '/admin/performance',
+          emoji: '👑',
+          title: 'Business Performance',
+          desc: 'Owner-only combined dashboard for Breaks, Singles, payruns, calendar and profit.',
+          status: 'Owner Only',
+        }] : []),
         {
           href: '/admin/import',
           emoji: '📥',
@@ -63,7 +72,14 @@ export default function AdminPage() {
           href: '/admin/streams',
           emoji: '📦',
           title: 'Operations',
-          desc: 'Inventory • Streams • Performance • Payruns.',
+          desc: 'Break stock, purchases and stream entry.',
+          status: 'Live',
+        },
+        {
+          href: '/admin/singles',
+          emoji: '🛒',
+          title: 'Singles Centre',
+          desc: 'Collections, tracked cards, sealed stock, giveaways and sales entry.',
           status: 'Live',
         },
       ],
@@ -126,7 +142,7 @@ export default function AdminPage() {
   return (
     <AdminGuard>
       <main className="admin-page">
-        <style jsx>{`
+        <style jsx global>{`
           .admin-page {
             min-height: 100vh;
             background: radial-gradient(circle at top, #15157a 0%, #06063d 45%, #02021f 100%);

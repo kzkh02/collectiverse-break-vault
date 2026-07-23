@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '../../../lib/supabase'
-import AdminGuard from '../guard'
 
 type BreakFilter = 'open' | 'completed' | 'all'
 
@@ -173,8 +172,7 @@ export default function BreaksPage() {
   }
 
   return (
-    <AdminGuard>
-      <main className="admin-page">
+    <main className="admin-page">
       <style jsx global>{`
         .admin-page {
           min-height: 100vh;
@@ -378,6 +376,9 @@ export default function BreaksPage() {
           </div>
 
           <div className="admin-actions">
+            <Link className="admin-button" href="/admin">
+              ← Admin
+            </Link>
             <Link className="admin-button primary" href="/admin/import">
               Import CSV
             </Link>
@@ -438,7 +439,6 @@ export default function BreaksPage() {
           )}
         </section>
       </div>
-      </main>
-    </AdminGuard>
+    </main>
   )
 }

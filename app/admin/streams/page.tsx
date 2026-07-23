@@ -5,7 +5,7 @@ import Link from 'next/link'
 import AdminGuard from '../guard'
 import { supabase } from '../../../lib/supabase'
 
-type Tab = 'calendar' | 'entry' | 'purchased' | 'performance'
+type Tab = 'entry' | 'purchased' | 'sales'
 type ItemType = 'packs' | 'follower_giveaway' | 'buyer_giveaway' | 'supplies'
 
 type StreamSet = {
@@ -207,7 +207,7 @@ function typeLabel(type?: string) {
 
 export default function StreamsPage() {
   const now = new Date()
-  const [tab, setTab] = useState<Tab>('calendar')
+  const [tab, setTab] = useState<Tab>('entry')
   const [message, setMessage] = useState('')
   const [sets, setSets] = useState<StreamSet[]>([])
   const [batches, setBatches] = useState<PackBatch[]>([])
@@ -613,7 +613,7 @@ export default function StreamsPage() {
       setStreamSalesAfterFees('')
       setProductRows([{ set_id: '', quantity_used: '' }])
       setSelectedDate(streamDate)
-      setTab('calendar')
+      setTab('sales')
       setMessage('Stream saved')
       loadData()
     } catch (error: any) {
@@ -733,7 +733,7 @@ export default function StreamsPage() {
   return (
     <AdminGuard>
       <main className="page">
-        <style jsx>{`
+        <style jsx global>{`
           .page {
             min-height: 100vh;
             background: radial-gradient(circle at top, #15157a 0%, #06063d 45%, #02021f 100%);
@@ -1014,6 +1014,58 @@ export default function StreamsPage() {
             font-weight: 850;
           }
 
+
+
+          .testing-table {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+          }
+
+          .testing-head,
+          .testing-row {
+            display: grid;
+            grid-template-columns: minmax(250px, 1.8fr) 150px 160px 100px 150px;
+            gap: 16px;
+            align-items: center;
+          }
+
+          .testing-head {
+            padding: 0 14px 4px;
+            color: rgba(255,255,255,.58);
+            font-size: .7rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+          }
+
+          .testing-row {
+            min-height: 74px;
+            border: 1px solid rgba(255,255,255,.12);
+            background: rgba(255,255,255,.05);
+            border-radius: 16px;
+            padding: 12px 14px;
+          }
+
+          .testing-metric small {
+            display: block;
+            margin-bottom: 3px;
+            color: rgba(255,255,255,.58);
+            font-size: .72rem;
+            font-weight: 800;
+          }
+
+          .testing-metric strong {
+            display: block;
+            font-size: .98rem;
+            font-weight: 950;
+          }
+
+          .testing-delete {
+            justify-self: end;
+            min-width: 130px;
+          }
+
           .payrun-row {
             display: grid;
             grid-template-columns: 130px 1fr repeat(4, 130px);
@@ -1117,12 +1169,37 @@ export default function StreamsPage() {
             max-width: 260px;
           }
 
+
+          .sales-head,
+          .sales-row {
+            grid-template-columns: minmax(250px, 1.7fr) 120px 105px 105px 110px 170px 90px;
+          }
+
+          .platform-pill {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(255,255,255,.16);
+            background: rgba(255,255,255,.08);
+            border-radius: 999px;
+            padding: 8px 11px;
+            font-size: .78rem;
+            font-weight: 950;
+          }
+
+          .sale-date {
+            font-weight: 850;
+            color: rgba(255,255,255,.9);
+          }
+
           @media (max-width: 920px) {
             .page { padding: 14px; }
             .top, .calendar-head, .payrun-head { flex-direction: column; align-items: flex-start; }
             .weekday-row { display: none; }
             .calendar-grid, .payrun-strip { grid-template-columns: 1fr; }
-            .form-grid, .product-row, .table-row, .payrun-row { grid-template-columns: 1fr; }
+            .form-grid, .product-row, .table-row, .payrun-row, .testing-head, .testing-row, .sales-head, .sales-row { grid-template-columns: 1fr; }
+            .testing-head { display: none; }
+            .testing-delete { justify-self: stretch; width: 100%; }
           }
         `}</style>
 
@@ -1131,7 +1208,7 @@ export default function StreamsPage() {
             <div>
               <h1>Operations</h1>
               <div className="sub">
-                Purchases, stream sales, FIFO costing and payrun performance.
+                Purchases, stream entry, inventory and sales management.
               </div>
             </div>
 
@@ -1142,65 +1219,12 @@ export default function StreamsPage() {
           </header>
 
           <nav className="tabs">
-            <button className={`tab ${tab === 'calendar' ? 'active' : ''}`} onClick={() => setTab('calendar')}>📅 Calendar</button>
             <button className={`tab ${tab === 'entry' ? 'active' : ''}`} onClick={() => setTab('entry')}>➕ Add Stream</button>
             <button className={`tab ${tab === 'purchased' ? 'active' : ''}`} onClick={() => setTab('purchased')}>📦 Purchased</button>
-            <button className={`tab ${tab === 'performance' ? 'active' : ''}`} onClick={() => setTab('performance')}>📈 Performance</button>
+            <button className={`tab ${tab === 'sales' ? 'active' : ''}`} onClick={() => setTab('sales')}>💷 Sales</button>
           </nav>
 
           {message && <div className="message">{message}</div>}
-
-          {tab === 'calendar' && (
-            <>
-              <section className="stats-grid">
-                <StatCard label="Month Sales" value={money(monthTotals.sales)} />
-                <StatCard label="After Fees" value={money(monthTotals.salesAfterFees)} />
-                <StatCard label="Quantity" value={String(monthTotals.quantity)} />
-                <StatCard label="Month Profit" value={money(monthTotals.profit)} />
-              </section>
-
-              <section className="panel">
-                <div className="calendar-head">
-                  <div>
-                    <div className="calendar-title">{monthLabel(selectedYear, selectedMonth)}</div>
-                    <div className="muted">Each day shows sales, after fees, quantity and profit.</div>
-                  </div>
-                  <div className="row-actions">
-                    <button className="button" onClick={() => changeMonth(-1)}>Previous</button>
-                    <button className="button" onClick={() => changeMonth(1)}>Next</button>
-                  </div>
-                </div>
-
-                <div className="weekday-row">
-                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-                    <div className="weekday" key={day}>{day}</div>
-                  ))}
-                </div>
-
-                <div className="calendar-grid">
-                  {calendarDays.map((day) => {
-                    const dayStreams = streamsByDate.get(day.key) || []
-                    const totals = sumStreams(dayStreams)
-
-                    return (
-                      <button
-                        key={day.key}
-                        className={`day-card ${selectedDate === day.key ? 'selected' : ''} ${!day.inMonth ? 'outside' : ''}`}
-                        onClick={() => setSelectedDate(day.key)}
-                      >
-                        <div className="day-date">{dayName(day.key)} {parseLocalDate(day.key).getDate()}</div>
-                        <div className="day-stat">Sales: {money(totals.sales)}</div>
-                        <div className="day-stat">After Fees: {money(totals.salesAfterFees)}</div>
-                        <div className="day-stat">Qty: {totals.quantity}</div>
-                        <div className="day-stat day-profit">Profit: {money(totals.profit)}</div>
-                        <div className="muted">{totals.count} stream(s)</div>
-                      </button>
-                    )
-                  })}
-                </div>
-              </section>
-            </>
-          )}
 
           {tab === 'entry' && (
             <section className="panel">
@@ -1264,33 +1288,46 @@ export default function StreamsPage() {
           )}
 
 
-          {tab === 'entry' && (
+          {tab === 'sales' && (
             <section className="panel">
-              <h2>Testing Tools</h2>
-              <div className="muted" style={{ marginBottom: 12 }}>
-                Delete test streams and restore their quantities back into purchase batches.
-              </div>
+              <h2>Sales</h2>
 
-              <div className="table">
-                {streams.slice(0, 20).map((stream) => (
-                  <div className="table-row" key={stream.id}>
+              <div className="testing-table">
+                <div className="testing-head sales-head">
+                  <span>Stream</span>
+                  <span>Platform</span>
+                  <span>Gross</span>
+                  <span>Net</span>
+                  <span>Packs Used</span>
+                  <span>Date</span>
+                  <span></span>
+                </div>
+
+                {streams.slice(0, 50).map((stream) => (
+                  <div className="testing-row sales-row" key={stream.id}>
                     <div>
-                      <div className="table-title">{fullDate(stream.stream_date)}</div>
-                      <div className="muted">Stream {stream.stream_slot}</div>
+                      <div className="table-title">Stream {stream.stream_slot}</div>
+                      <div className="muted">Break Operations</div>
                     </div>
-                    <div>Sales {money(stream.sales)}</div>
-                    <div>After Fees {money(stream.sales_after_fees)}</div>
-                    <div>Qty {stream.packs_used}</div>
-                    <div>Profit {money(stream.profit)}</div>
-                    <button className="button danger" onClick={() => deleteStream(stream.id)}>
-                      Delete Stream
-                    </button>
+                    <div><span className="platform-pill">Streaming</span></div>
+                    <div className="testing-metric">
+                      <small>Gross</small>
+                      <strong>{money(stream.sales)}</strong>
+                    </div>
+                    <div className="testing-metric">
+                      <small>Net</small>
+                      <strong>{money(stream.sales_after_fees)}</strong>
+                    </div>
+                    <div className="testing-metric">
+                      <small>Packs Used</small>
+                      <strong>{stream.packs_only_used || 0}</strong>
+                    </div>
+                    <div className="sale-date">{fullDate(stream.stream_date)}</div>
+                    <button className="button danger testing-delete" onClick={() => deleteStream(stream.id)}>Delete</button>
                   </div>
                 ))}
 
-                {streams.length === 0 && (
-                  <div className="muted">No streams to delete yet.</div>
-                )}
+                {streams.length === 0 && <div className="muted">No stream sales recorded yet.</div>}
               </div>
             </section>
           )}
@@ -1384,138 +1421,6 @@ export default function StreamsPage() {
             </>
           )}
 
-          {tab === 'performance' && (
-            <>
-              <section className="panel hero-panel">
-                <div className="payrun-head">
-                  <div>
-                    <div className="eyebrow">Fortnightly Payrun</div>
-                    <h2>Performance</h2>
-                    <div className="muted">
-                      Tax year {getTaxYearLabel(taxYearStart)} · {selectedPayrun.label} · {shortDate(selectedPayrun.start)} → {shortDate(selectedPayrun.end)}
-                    </div>
-                  </div>
-
-                  <div className="row-actions">
-                    <select className="select compact-select" value={taxYearStart} onChange={(e) => setTaxYearStart(e.target.value)}>
-                      <option value="2026-04-10">2026/2027</option>
-                      <option value="2025-04-10">2025/2026</option>
-                      <option value="2024-04-10">2024/2025</option>
-                    </select>
-
-                    <select className="select compact-select" value={selectedPayrunPeriod} onChange={(e) => setSelectedPayrunPeriod(Number(e.target.value))}>
-                      {payrunPeriods.map((period) => (
-                        <option key={period.period} value={period.period}>
-                          {period.label} · {shortDate(period.start)} - {shortDate(period.end)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="stats-grid">
-                  <StatCard label="Average Profit / Stream" value={money(currentPayrun.count ? currentPayrun.profit / currentPayrun.count : 0)} sub={`${currentPayrun.count} stream(s)`} />
-                  <StatCard label="Average Packs / Stream" value={currentPayrun.count ? (currentPayrun.packsOnly / currentPayrun.count).toFixed(1) : '0.0'} sub={`${currentPayrun.packsOnly} packs used`} />
-                  <StatCard label="Average Sales / Stream" value={money(currentPayrun.count ? currentPayrun.salesAfterFees / currentPayrun.count : 0)} sub="After fees" />
-                  <StatCard label="Vs Previous Payrun" value={percent(payrunChange)} sub={previousPayrun ? `${previousPayrun.label}: ${money(previousPayrunTotals.profit)}` : 'No previous payrun'} />
-                </div>
-              </section>
-
-              <section className="panel">
-                <h2>Payrun Snapshot</h2>
-                <div className="payrun-strip">
-                  {visiblePayrunPeriods.map((period) => {
-                    const totals = payrunHistory.find((item) => item.period === period.period)
-                    const isActive = selectedPayrunPeriod === period.period
-
-                    return (
-                      <button
-                        key={period.period}
-                        className={`payrun-card ${isActive ? 'active' : ''}`}
-                        onClick={() => setSelectedPayrunPeriod(period.period)}
-                      >
-                        <div className="payrun-card-title">{period.label}</div>
-                        <div className="payrun-card-date">{shortDate(period.start)} → {shortDate(period.end)}</div>
-
-                        <div className="payrun-card-grid">
-                          <div>
-                            <span>Sales</span>
-                            <strong>{money(totals?.sales || 0)}</strong>
-                          </div>
-                          <div>
-                            <span>After Fees</span>
-                            <strong>{money(totals?.salesAfterFees || 0)}</strong>
-                          </div>
-                          <div>
-                            <span>Packs</span>
-                            <strong>{totals?.packsOnly || 0}</strong>
-                          </div>
-                          <div>
-                            <span>Profit</span>
-                            <strong className="profit-text">{money(totals?.profit || 0)}</strong>
-                          </div>
-                        </div>
-                      </button>
-                    )
-                  })}
-                </div>
-
-                <div className="row-actions" style={{ marginTop: 14 }}>
-                  <button
-                    className="button"
-                    disabled={selectedPayrunPeriod <= 1}
-                    onClick={() => setSelectedPayrunPeriod(Math.max(1, selectedPayrunPeriod - 1))}
-                  >
-                    Previous Payrun
-                  </button>
-                  <button
-                    className="button"
-                    disabled={selectedPayrunPeriod >= 26}
-                    onClick={() => setSelectedPayrunPeriod(Math.min(26, selectedPayrunPeriod + 1))}
-                  >
-                    Next Payrun
-                  </button>
-                </div>
-              </section>
-
-              <section className="panel">
-                <h2>Profit By Day Of Week</h2>
-                <div className="performance-grid">
-                  {profitByDay.map((item) => (
-                    <StatCard key={item.day} label={item.day} value={money(item.average)} sub={`${item.count} stream(s) · ${money(item.total)} total`} />
-                  ))}
-                </div>
-              </section>
-
-              <section className="panel">
-                <h2>Best Days Ever</h2>
-                <div className="table">
-                  {bestDays.map((item, index) => (
-                    <div className="table-row" key={item.date}>
-                      <div>
-                        <div className="table-title">#{index + 1} {fullDate(item.date)}</div>
-                      </div>
-                      <div>Sales {money(item.sales)}</div>
-                      <div>After Fees {money(item.salesAfterFees)}</div>
-                      <div>Packs {item.packsOnly}</div>
-                      <div>Profit {money(item.profit)}</div>
-                      <div></div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-
-              <section className="panel">
-                <h2>All-Time Stats</h2>
-                <div className="stats-grid">
-                  <StatCard label="All-Time Sales" value={money(allTime.sales)} />
-                  <StatCard label="All-Time After Fees" value={money(allTime.salesAfterFees)} />
-                  <StatCard label="All-Time Packs" value={String(allTime.packsOnly)} />
-                  <StatCard label="Average Stream Profit" value={money(allTime.count ? allTime.profit / allTime.count : 0)} />
-                </div>
-              </section>
-            </>
-          )}
         </div>
       </main>
     </AdminGuard>
