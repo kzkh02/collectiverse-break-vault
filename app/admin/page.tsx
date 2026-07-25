@@ -70,8 +70,8 @@ export default function AdminPage() {
         },
         {
           href: '/admin/streams',
-          emoji: '📦',
-          title: 'Operations',
+          emoji: '🎛️',
+          title: 'Breaks Centre',
           desc: 'Break stock, purchases and stream entry.',
           status: 'Live',
         },

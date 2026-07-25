@@ -5,7 +5,7 @@ import Link from 'next/link'
 import AdminGuard from '../guard'
 import { supabase } from '../../../lib/supabase'
 
-type Tab = 'dashboard' | 'active' | 'sold' | 'ebay' | 'streaming' | 'website' | 'sales' | 'purchases'
+type Tab = 'active' | 'sold' | 'ebay' | 'streaming' | 'website' | 'sales' | 'purchases'
 type Platform = 'unlisted' | 'ebay' | 'streaming' | 'website'
 type CardStatus = 'available' | 'listed' | 'reserved' | 'sold'
 type PlatformView = 'active' | 'sold'
@@ -92,10 +92,6 @@ type SealedBatch = {
   notes: string | null
 }
 
-type CalendarDay = { key: string; inMonth: boolean }
-
-const PAYRUN_ANCHOR = '2026-07-31'
-
 const platformLabels: Record<Platform, string> = {
   unlisted: 'Unlisted',
   ebay: 'eBay',
@@ -124,12 +120,6 @@ function parseDate(value: string) {
   return new Date(year, month - 1, day)
 }
 
-function addDays(value: string, days: number) {
-  const date = parseDate(value)
-  date.setDate(date.getDate() + days)
-  return dateKey(date)
-}
-
 function todayKey() {
   return dateKey(new Date())
 }
@@ -137,41 +127,6 @@ function todayKey() {
 function shortDate(value: string) {
   if (!value) return '—'
   return parseDate(value).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
-}
-
-function fullDate(value: string) {
-  return parseDate(value).toLocaleDateString('en-GB', {
-    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
-  })
-}
-
-function monthLabel(year: number, month: number) {
-  return new Date(year, month, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
-}
-
-function getCalendarDays(year: number, month: number): CalendarDay[] {
-  const first = new Date(year, month, 1)
-  const start = new Date(first)
-  start.setDate(first.getDate() - first.getDay())
-  return Array.from({ length: 42 }, (_, index) => {
-    const date = new Date(start)
-    date.setDate(start.getDate() + index)
-    return { key: dateKey(date), inMonth: date.getMonth() === month }
-  })
-}
-
-function getPayrunForDate(value: string) {
-  const anchor = parseDate(PAYRUN_ANCHOR).getTime()
-  const target = parseDate(value).getTime()
-  const dayDifference = Math.floor((target - anchor) / 86400000)
-  const periodOffset = Math.floor(dayDifference / 14)
-  const start = addDays(PAYRUN_ANCHOR, periodOffset * 14)
-  return { index: periodOffset + 1, start, end: addDays(start, 13) }
-}
-
-function getPayrunByOffset(base: ReturnType<typeof getPayrunForDate>, offset: number) {
-  const start = addDays(base.start, offset * 14)
-  return { index: base.index + offset, start, end: addDays(start, 13) }
 }
 
 function blankDraftCard(): DraftCard {
@@ -188,8 +143,7 @@ function normalisePlatform(value: string): Platform {
 }
 
 export default function SinglesCentrePage() {
-  const now = new Date()
-  const [tab, setTab] = useState<Tab>('dashboard')
+  const [tab, setTab] = useState<Tab>('active')
   const [platformView, setPlatformView] = useState<PlatformView>('active')
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(true)
@@ -237,10 +191,6 @@ export default function SinglesCentrePage() {
   const [saleDate, setSaleDate] = useState(todayKey())
   const [saleNotes, setSaleNotes] = useState('')
 
-  const [selectedYear, setSelectedYear] = useState(now.getFullYear())
-  const [selectedMonth, setSelectedMonth] = useState(now.getMonth())
-  const [selectedDate, setSelectedDate] = useState(todayKey())
-  const [payrunOffset, setPayrunOffset] = useState(0)
 
   async function loadData() {
     setLoading(true)
@@ -286,81 +236,6 @@ export default function SinglesCentrePage() {
   const sealedInventoryValue = sealedInventory.reduce((sum, batch) => sum + number(batch.quantity_remaining) * number(batch.unit_cost), 0)
   const giveawayInventoryValue = giveawayInventory.reduce((sum, batch) => sum + number(batch.quantity_remaining) * number(batch.unit_cost), 0)
   const totalInventoryValue = collectionInventoryValue + activeCardCost + sealedInventoryValue + giveawayInventoryValue
-
-  const currentPayrunBase = useMemo(() => getPayrunForDate(todayKey()), [])
-  const selectedPayrun = useMemo(() => getPayrunByOffset(currentPayrunBase, payrunOffset), [currentPayrunBase, payrunOffset])
-  const previousPayrun = useMemo(() => getPayrunByOffset(selectedPayrun, -1), [selectedPayrun])
-
-  const getSaleStockCount = (sale: Sale) => {
-    const metaMatch = sale.notes?.match(/\[\[sale_meta:([\s\S]*?)\]\]/)
-    if (!metaMatch) return number(sale.quantity || 1)
-
-    try {
-      const meta = JSON.parse(metaMatch[1]) as {
-        collectionQuantity?: number
-        trackedCardIds?: string[]
-        sealedAllocations?: { sealedId: string; quantity: number }[]
-      }
-      const sealedCount = (meta.sealedAllocations || []).reduce((sum, allocation) => {
-        const batch = sealedBatches.find((item) => item.id === allocation.sealedId)
-        return batch && !isGiveawayBatch(batch) ? sum + number(allocation.quantity) : sum
-      }, 0)
-
-      return number(meta.collectionQuantity) + (meta.trackedCardIds || []).length + sealedCount
-    } catch {
-      return number(sale.quantity || 1)
-    }
-  }
-
-  const summariseSales = (rows: Sale[]) => ({
-    count: rows.reduce((sum, sale) => sum + getSaleStockCount(sale), 0),
-    transactions: rows.length,
-    gross: rows.reduce((sum, sale) => sum + number(sale.sale_price), 0),
-    net: rows.reduce((sum, sale) => sum + number(sale.net_sale), 0),
-    cost: rows.reduce((sum, sale) => sum + number(sale.cost_basis), 0),
-    postage: rows.reduce((sum, sale) => sum + number(sale.postage), 0),
-    profit: rows.reduce((sum, sale) => sum + number(sale.profit), 0),
-  })
-
-  const payrunSales = sales.filter((sale) => sale.sold_date >= selectedPayrun.start && sale.sold_date <= selectedPayrun.end)
-  const previousPayrunSales = sales.filter((sale) => sale.sold_date >= previousPayrun.start && sale.sold_date <= previousPayrun.end)
-  const payrunTotals = summariseSales(payrunSales)
-  const previousPayrunTotals = summariseSales(previousPayrunSales)
-  const payrunChange = previousPayrunTotals.profit ? ((payrunTotals.profit - previousPayrunTotals.profit) / Math.abs(previousPayrunTotals.profit)) * 100 : 0
-
-  const salesByDate = useMemo(() => {
-    const map = new Map<string, Sale[]>()
-    sales.forEach((sale) => map.set(sale.sold_date, [...(map.get(sale.sold_date) || []), sale]))
-    return map
-  }, [sales])
-
-  const calendarDays = useMemo(() => getCalendarDays(selectedYear, selectedMonth), [selectedYear, selectedMonth])
-  const selectedDaySales = salesByDate.get(selectedDate) || []
-  const selectedDayTotals = summariseSales(selectedDaySales)
-
-  const salesDayAverages = useMemo(() => {
-    const grouped = new Map<string, { days: Set<string>; cards: number; profit: number; net: number }>()
-    sales.forEach((sale) => {
-      const day = parseDate(sale.sold_date).toLocaleDateString('en-GB', { weekday: 'long' })
-      const current = grouped.get(day) || { days: new Set<string>(), cards: 0, profit: 0, net: 0 }
-      current.days.add(sale.sold_date)
-      current.cards += getSaleStockCount(sale)
-      current.profit += number(sale.profit)
-      current.net += number(sale.net_sale)
-      grouped.set(day, current)
-    })
-    const order = ['Friday', 'Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday']
-    return order.filter((day) => grouped.has(day)).map((day) => {
-      const item = grouped.get(day)!
-      const count = item.days.size
-      return { day, count, cards: item.cards / count, profit: item.profit / count, net: item.net / count }
-    })
-  }, [sales])
-
-  const platformTotals = useMemo(() => (['ebay', 'streaming', 'website'] as const).map((platform) => {
-    const rows = sales.filter((sale) => sale.platform === platform)
-    return { platform, ...summariseSales(rows) }
-  }), [sales])
 
   const filteredCards = useMemo(() => {
     const query = search.trim().toLowerCase()
@@ -847,25 +722,14 @@ export default function SinglesCentrePage() {
     setMessage('Sale deleted and stock restored'); loadData()
   }
 
-  function changeMonth(amount: number) {
-    const next = new Date(selectedYear, selectedMonth + amount, 1)
-    setSelectedYear(next.getFullYear()); setSelectedMonth(next.getMonth())
-  }
-
-  function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
-    return <div className="stat-card"><div className="stat-label">{label}</div><div className="stat-value">{value}</div>{sub && <div className="stat-sub">{sub}</div>}</div>
-  }
-
   function SaleTable({ rows }: { rows: Sale[] }) {
     return <div className="table-list">
-      <div className="table-head"><span>Sale</span><span>Platform</span><span>Gross</span><span>Net</span><span>Cost</span><span>Profit</span><span>Date</span><span></span></div>
+      <div className="table-head"><span>Sale</span><span>Platform</span><span>Gross</span><span>Net</span><span>Date</span><span></span></div>
       {rows.length === 0 ? <div className="empty">No sales recorded.</div> : rows.map((sale) => <div className="sale-row" key={sale.id}>
         <div><strong>{sale.description}</strong><small>{sale.sale_type === 'pool' ? `${sale.quantity} collection cards · ${sale.collections?.name || 'Collection'}` : [sale.inventory_cards?.set_name, sale.inventory_cards?.card_number].filter(Boolean).join(' · ') || 'Tracked card'}</small></div>
         <div><span className="pill">{platformLabels[sale.platform]}</span></div>
         <div><small>Gross</small><strong>{money(sale.sale_price)}</strong></div>
         <div><small>Net</small><strong>{money(sale.net_sale)}</strong></div>
-        <div><small>Cost</small><strong>{money(sale.cost_basis)}</strong></div>
-        <div><small>Profit</small><strong className={sale.profit >= 0 ? 'profit' : 'loss'}>{money(sale.profit)}</strong></div>
         <div>{shortDate(sale.sold_date)}</div>
         <div><button className="mini danger" onClick={() => deleteSale(sale)}>Delete</button></div>
       </div>)}
@@ -896,7 +760,7 @@ export default function SinglesCentrePage() {
   }
 
   return <AdminGuard><main className="page"><style jsx global>{`
-    .page{min-height:100vh;background:radial-gradient(circle at top,#15157a 0%,#06063d 45%,#02021f 100%);color:white;padding:24px}.wrap{max-width:1280px;margin:0 auto}h1{margin:0;font-size:clamp(2rem,5vw,3.4rem);font-weight:950;letter-spacing:-1px}h2{margin:0;font-size:1.3rem;font-weight:950}p{margin:7px 0 0;color:rgba(255,255,255,.68);font-weight:750}.top{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;margin-bottom:20px}.eyebrow{color:#fde68a;font-size:.75rem;letter-spacing:1.5px;text-transform:uppercase;font-weight:950;margin-bottom:7px}.button,.tab,.action,.mini{border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.08);color:white;border-radius:999px;font-weight:900;cursor:pointer;text-decoration:none}.button{padding:11px 15px}.button.primary{background:linear-gradient(135deg,#7c3aed,#c084fc);border-color:rgba(216,180,254,.65)}.tabs{display:flex;gap:9px;flex-wrap:wrap;margin:18px 0}.tab{padding:11px 15px}.tab.active{background:linear-gradient(135deg,#7c3aed,#c084fc);border-color:rgba(216,180,254,.68)}.panel{border:1px solid rgba(255,255,255,.14);background:linear-gradient(135deg,rgba(255,255,255,.075),rgba(255,255,255,.045));border-radius:22px;padding:18px;margin-bottom:16px;box-shadow:0 18px 56px rgba(0,0,0,.28)}.panel.slim{padding:16px 20px}.panel>.card-row:first-of-type,.panel>.sale-row:first-of-type{margin-top:0}.panel-head{display:flex;justify-content:space-between;gap:16px;align-items:center}.stats-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.stat-card{border:1px solid rgba(255,255,255,.13);background:rgba(255,255,255,.06);border-radius:18px;padding:16px}.stat-label{text-transform:uppercase;letter-spacing:.8px;font-size:.7rem;font-weight:950;color:rgba(255,255,255,.62)}.stat-value{font-size:1.35rem;font-weight:950;margin-top:7px}.stat-sub{font-size:.78rem;color:rgba(255,255,255,.62);margin-top:5px;font-weight:750}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.field{display:flex;flex-direction:column;gap:7px}.field label{font-size:.72rem;text-transform:uppercase;letter-spacing:.7px;font-weight:950;color:rgba(255,255,255,.68)}.input,.select,.textarea{width:100%;box-sizing:border-box;border:1px solid rgba(255,255,255,.16);background:#0c0c43;color:white;border-radius:14px;padding:12px 13px;font-weight:800}.textarea{min-height:88px;resize:vertical}.span-2{grid-column:span 2}.span-4{grid-column:span 4}.message{margin:0 0 16px;border:1px solid rgba(250,204,21,.28);background:rgba(250,204,21,.1);color:#fde68a;border-radius:14px;padding:12px 14px;font-weight:850}.card-table-head,.card-row{display:grid;grid-template-columns:minmax(220px,1.7fr) minmax(140px,1.15fr) 100px 120px 110px 110px minmax(190px,1.25fr);gap:12px;align-items:center}.card-table-head,.table-head{padding:0 14px 10px;color:rgba(255,255,255,.58);font-size:.7rem;text-transform:uppercase;font-weight:950;letter-spacing:1px}.card-row{padding:14px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);border-radius:16px;margin-top:8px;transition:transform .15s ease,border-color .15s ease,background .15s ease}.card-row:hover{transform:translateY(-1px);border-color:rgba(192,132,252,.34);background:rgba(124,58,237,.08)}.card-row small,.sale-row small{display:block;color:rgba(255,255,255,.58);font-size:.75rem;font-weight:750;margin-bottom:3px}.card-row strong,.card-row span{display:block}.card-main strong{font-size:1rem}.pill,.status-pill{display:inline-flex!important;width:max-content;padding:7px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);font-size:.76rem;font-weight:900;text-transform:capitalize}.status-pill.listed{color:#bfdbfe}.status-pill.reserved{color:#fde68a}.row-actions{display:flex;gap:8px}.action{padding:11px 15px;border-radius:12px;min-width:78px;text-align:center}.action.edit{background:rgba(59,130,246,.18);border-color:rgba(96,165,250,.35)}.action.sold{background:linear-gradient(135deg,#7c3aed,#a855f7);border-color:rgba(216,180,254,.4)}.table-head,.sale-row{display:grid;grid-template-columns:minmax(220px,1.6fr) 110px 100px 100px 100px 105px 115px 80px;gap:12px;align-items:center}.sale-row{padding:14px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);border-radius:16px;margin-top:8px}.profit{color:#86efac}.loss{color:#fca5a5}.mini{padding:7px 10px}.danger{background:rgba(239,68,68,.14);border-color:rgba(248,113,113,.35)}.empty{padding:28px;text-align:center;color:rgba(255,255,255,.58);font-weight:800}.segmented{display:flex;border:1px solid rgba(255,255,255,.14);border-radius:999px;padding:3px}.segmented button{border:0;background:transparent;color:white;padding:8px 13px;border-radius:999px;font-weight:900;cursor:pointer}.segmented button.selected{background:#7c3aed}.purchase-card{border:1px solid rgba(255,255,255,.12);border-radius:18px;padding:15px;background:rgba(255,255,255,.04);margin-top:10px}.draft-row{display:grid;grid-template-columns:1.3fr 1fr .7fr .6fr .7fr .8fr .8fr auto;gap:8px;margin-top:10px}.summary-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:16px}.summary-item{border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:12px}.summary-item small{display:block;color:rgba(255,255,255,.58);font-weight:800}.summary-item strong{display:block;margin-top:5px}.calendar-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}.calendar-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:7px}.weekday{text-align:center;color:rgba(255,255,255,.54);font-size:.7rem;font-weight:950;padding:6px}.day{min-height:142px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.035);border-radius:14px;padding:10px;color:white;text-align:left;cursor:pointer}.day.out{opacity:.34}.day.selected{border-color:#c084fc;background:rgba(124,58,237,.2)}.day-number{font-size:.92rem;font-weight:950;margin-bottom:10px}.day-metric{font-size:.68rem;line-height:1.45;color:rgba(255,255,255,.9);font-weight:850;margin-top:4px}.day-profit-line{font-size:.72rem;line-height:1.45;color:#86efac;font-weight:950;margin-top:4px}.day-profit-line.loss{color:#fca5a5}.day-streams{font-size:.65rem;line-height:1.45;color:rgba(255,255,255,.58);font-weight:850;margin-top:4px}.stream-picker{position:relative}.stream-picker-button{width:100%;min-height:44px;display:flex;align-items:center;justify-content:space-between;gap:10px;text-align:left;border:1px solid rgba(255,255,255,.16);background:#0c0c43;color:white;border-radius:14px;padding:12px 13px;font-weight:850;cursor:pointer}.stream-picker-menu{display:none;position:absolute;z-index:40;top:calc(100% + 6px);left:0;width:240px;border:1px solid rgba(255,255,255,.18);background:#09093e;border-radius:14px;padding:6px;box-shadow:0 20px 50px rgba(0,0,0,.45)}.stream-picker:hover .stream-picker-menu,.stream-picker:focus-within .stream-picker-menu{display:block}.picker-category{position:relative}.picker-category-button,.picker-option{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;border:0;background:transparent;color:white;border-radius:10px;padding:10px 11px;text-align:left;font-weight:850;cursor:pointer}.picker-category-button:hover,.picker-option:hover{background:rgba(124,58,237,.2)}.picker-submenu{display:none;position:absolute;z-index:41;left:calc(100% + 7px);top:-6px;width:380px;max-height:330px;overflow:auto;border:1px solid rgba(255,255,255,.18);background:#09093e;border-radius:14px;padding:7px;box-shadow:0 20px 50px rgba(0,0,0,.45)}.picker-category:hover>.picker-submenu,.picker-category:focus-within>.picker-submenu{display:block}.picker-search{width:100%;box-sizing:border-box;border:1px solid rgba(255,255,255,.16);background:#101052;color:white;border-radius:10px;padding:10px 11px;font-weight:800;margin-bottom:6px}.picker-empty{padding:12px;color:rgba(255,255,255,.56);font-size:.76rem;font-weight:800}.picker-option small{color:rgba(255,255,255,.55);font-weight:750}.picker-selected{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.payrun-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:15px}.payrun-nav{display:flex;gap:8px}.platform-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.inventory-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.inventory-card{border:1px solid rgba(255,255,255,.13);background:rgba(255,255,255,.05);border-radius:18px;padding:16px}.inventory-card small{display:block;color:rgba(255,255,255,.58);font-weight:900;text-transform:uppercase;letter-spacing:.7px}.inventory-card strong{display:block;font-size:1.25rem;margin-top:7px}.inventory-card span{display:block;color:rgba(255,255,255,.64);font-size:.78rem;font-weight:750;margin-top:5px}.platform-card{border:1px solid rgba(255,255,255,.13);background:rgba(255,255,255,.05);border-radius:18px;padding:16px}.platform-card h3{margin:0 0 10px}.platform-card strong{display:block;font-size:1.25rem}.platform-card small{display:block;color:rgba(255,255,255,.58);margin-top:4px}.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:18px;z-index:20}.modal{width:min(760px,100%);max-height:90vh;overflow:auto;background:#0a0a42;border:1px solid rgba(255,255,255,.18);border-radius:24px;padding:20px}.modal-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:16px}
+    .page{min-height:100vh;background:radial-gradient(circle at top,#15157a 0%,#06063d 45%,#02021f 100%);color:white;padding:24px}.wrap{max-width:1280px;margin:0 auto}h1{margin:0;font-size:clamp(2rem,5vw,3.4rem);font-weight:950;letter-spacing:-1px}h2{margin:0;font-size:1.3rem;font-weight:950}p{margin:7px 0 0;color:rgba(255,255,255,.68);font-weight:750}.top{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;margin-bottom:20px}.eyebrow{color:#fde68a;font-size:.75rem;letter-spacing:1.5px;text-transform:uppercase;font-weight:950;margin-bottom:7px}.button,.tab,.action,.mini{border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.08);color:white;border-radius:999px;font-weight:900;cursor:pointer;text-decoration:none}.button{padding:11px 15px}.button.primary{background:linear-gradient(135deg,#7c3aed,#c084fc);border-color:rgba(216,180,254,.65)}.tabs{display:flex;gap:9px;flex-wrap:wrap;margin:18px 0}.tab{padding:11px 15px}.tab.active{background:linear-gradient(135deg,#7c3aed,#c084fc);border-color:rgba(216,180,254,.68)}.panel{border:1px solid rgba(255,255,255,.14);background:linear-gradient(135deg,rgba(255,255,255,.075),rgba(255,255,255,.045));border-radius:22px;padding:18px;margin-bottom:16px;box-shadow:0 18px 56px rgba(0,0,0,.28)}.panel.slim{padding:16px 20px}.panel>.card-row:first-of-type,.panel>.sale-row:first-of-type{margin-top:0}.panel-head{display:flex;justify-content:space-between;gap:16px;align-items:center}.stats-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.stat-card{border:1px solid rgba(255,255,255,.13);background:rgba(255,255,255,.06);border-radius:18px;padding:16px}.stat-label{text-transform:uppercase;letter-spacing:.8px;font-size:.7rem;font-weight:950;color:rgba(255,255,255,.62)}.stat-value{font-size:1.35rem;font-weight:950;margin-top:7px}.stat-sub{font-size:.78rem;color:rgba(255,255,255,.62);margin-top:5px;font-weight:750}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.field{display:flex;flex-direction:column;gap:7px}.field label{font-size:.72rem;text-transform:uppercase;letter-spacing:.7px;font-weight:950;color:rgba(255,255,255,.68)}.input,.select,.textarea{width:100%;box-sizing:border-box;border:1px solid rgba(255,255,255,.16);background:#0c0c43;color:white;border-radius:14px;padding:12px 13px;font-weight:800}.textarea{min-height:88px;resize:vertical}.span-2{grid-column:span 2}.span-4{grid-column:span 4}.message{margin:0 0 16px;border:1px solid rgba(250,204,21,.28);background:rgba(250,204,21,.1);color:#fde68a;border-radius:14px;padding:12px 14px;font-weight:850}.card-table-head,.card-row{display:grid;grid-template-columns:minmax(220px,1.7fr) minmax(140px,1.15fr) 100px 120px 110px 110px minmax(190px,1.25fr);gap:12px;align-items:center}.card-table-head,.table-head{padding:0 14px 10px;color:rgba(255,255,255,.58);font-size:.7rem;text-transform:uppercase;font-weight:950;letter-spacing:1px}.card-row{padding:14px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);border-radius:16px;margin-top:8px;transition:transform .15s ease,border-color .15s ease,background .15s ease}.card-row:hover{transform:translateY(-1px);border-color:rgba(192,132,252,.34);background:rgba(124,58,237,.08)}.card-row small,.sale-row small{display:block;color:rgba(255,255,255,.58);font-size:.75rem;font-weight:750;margin-bottom:3px}.card-row strong,.card-row span{display:block}.card-main strong{font-size:1rem}.pill,.status-pill{display:inline-flex!important;width:max-content;padding:7px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);font-size:.76rem;font-weight:900;text-transform:capitalize}.status-pill.listed{color:#bfdbfe}.status-pill.reserved{color:#fde68a}.row-actions{display:flex;gap:8px}.action{padding:11px 15px;border-radius:12px;min-width:78px;text-align:center}.action.edit{background:rgba(59,130,246,.18);border-color:rgba(96,165,250,.35)}.action.sold{background:linear-gradient(135deg,#7c3aed,#a855f7);border-color:rgba(216,180,254,.4)}.table-head,.sale-row{display:grid;grid-template-columns:minmax(240px,1.8fr) 120px 110px 110px 130px 90px;gap:12px;align-items:center}.sale-row{padding:14px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);border-radius:16px;margin-top:8px}.profit{color:#86efac}.loss{color:#fca5a5}.mini{padding:7px 10px}.danger{background:rgba(239,68,68,.14);border-color:rgba(248,113,113,.35)}.empty{padding:28px;text-align:center;color:rgba(255,255,255,.58);font-weight:800}.segmented{display:flex;border:1px solid rgba(255,255,255,.14);border-radius:999px;padding:3px}.segmented button{border:0;background:transparent;color:white;padding:8px 13px;border-radius:999px;font-weight:900;cursor:pointer}.segmented button.selected{background:#7c3aed}.purchase-card{border:1px solid rgba(255,255,255,.12);border-radius:18px;padding:15px;background:rgba(255,255,255,.04);margin-top:10px}.draft-row{display:grid;grid-template-columns:1.3fr 1fr .7fr .6fr .7fr .8fr .8fr auto;gap:8px;margin-top:10px}.summary-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:16px}.summary-item{border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:12px}.summary-item small{display:block;color:rgba(255,255,255,.58);font-weight:800}.summary-item strong{display:block;margin-top:5px}.calendar-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}.calendar-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:7px}.weekday{text-align:center;color:rgba(255,255,255,.54);font-size:.7rem;font-weight:950;padding:6px}.day{min-height:142px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.035);border-radius:14px;padding:10px;color:white;text-align:left;cursor:pointer}.day.out{opacity:.34}.day.selected{border-color:#c084fc;background:rgba(124,58,237,.2)}.day-number{font-size:.92rem;font-weight:950;margin-bottom:10px}.day-metric{font-size:.68rem;line-height:1.45;color:rgba(255,255,255,.9);font-weight:850;margin-top:4px}.day-profit-line{font-size:.72rem;line-height:1.45;color:#86efac;font-weight:950;margin-top:4px}.day-profit-line.loss{color:#fca5a5}.day-streams{font-size:.65rem;line-height:1.45;color:rgba(255,255,255,.58);font-weight:850;margin-top:4px}.stream-picker{position:relative}.stream-picker-button{width:100%;min-height:44px;display:flex;align-items:center;justify-content:space-between;gap:10px;text-align:left;border:1px solid rgba(255,255,255,.16);background:#0c0c43;color:white;border-radius:14px;padding:12px 13px;font-weight:850;cursor:pointer}.stream-picker-menu{display:none;position:absolute;z-index:40;top:calc(100% + 6px);left:0;width:240px;border:1px solid rgba(255,255,255,.18);background:#09093e;border-radius:14px;padding:6px;box-shadow:0 20px 50px rgba(0,0,0,.45)}.stream-picker:hover .stream-picker-menu,.stream-picker:focus-within .stream-picker-menu{display:block}.picker-category{position:relative}.picker-category-button,.picker-option{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;border:0;background:transparent;color:white;border-radius:10px;padding:10px 11px;text-align:left;font-weight:850;cursor:pointer}.picker-category-button:hover,.picker-option:hover{background:rgba(124,58,237,.2)}.picker-submenu{display:none;position:absolute;z-index:41;left:calc(100% + 7px);top:-6px;width:380px;max-height:330px;overflow:auto;border:1px solid rgba(255,255,255,.18);background:#09093e;border-radius:14px;padding:7px;box-shadow:0 20px 50px rgba(0,0,0,.45)}.picker-category:hover>.picker-submenu,.picker-category:focus-within>.picker-submenu{display:block}.picker-search{width:100%;box-sizing:border-box;border:1px solid rgba(255,255,255,.16);background:#101052;color:white;border-radius:10px;padding:10px 11px;font-weight:800;margin-bottom:6px}.picker-empty{padding:12px;color:rgba(255,255,255,.56);font-size:.76rem;font-weight:800}.picker-option small{color:rgba(255,255,255,.55);font-weight:750}.picker-selected{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.payrun-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:15px}.payrun-nav{display:flex;gap:8px}.platform-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.inventory-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.inventory-card{border:1px solid rgba(255,255,255,.13);background:rgba(255,255,255,.05);border-radius:18px;padding:16px}.inventory-card small{display:block;color:rgba(255,255,255,.58);font-weight:900;text-transform:uppercase;letter-spacing:.7px}.inventory-card strong{display:block;font-size:1.25rem;margin-top:7px}.inventory-card span{display:block;color:rgba(255,255,255,.64);font-size:.78rem;font-weight:750;margin-top:5px}.platform-card{border:1px solid rgba(255,255,255,.13);background:rgba(255,255,255,.05);border-radius:18px;padding:16px}.platform-card h3{margin:0 0 10px}.platform-card strong{display:block;font-size:1.25rem}.platform-card small{display:block;color:rgba(255,255,255,.58);margin-top:4px}.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:18px;z-index:20}.modal{width:min(760px,100%);max-height:90vh;overflow:auto;background:#0a0a42;border:1px solid rgba(255,255,255,.18);border-radius:24px;padding:20px}.modal-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:16px}
 .stream-items{margin-top:18px;border-top:1px solid rgba(255,255,255,.12);padding-top:18px}.stream-item-row{display:grid;grid-template-columns:minmax(0,1fr) 180px auto;gap:10px;align-items:end;margin-top:10px}.tracked-picker{margin-top:18px;border-top:1px solid rgba(255,255,255,.12);padding-top:18px}.tracked-picker-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:12px}.tracked-choice{display:flex;justify-content:space-between;align-items:center;gap:14px;text-align:left;border:1px solid rgba(255,255,255,.13);background:rgba(255,255,255,.045);color:white;border-radius:15px;padding:13px;cursor:pointer}.tracked-choice:hover{border-color:rgba(192,132,252,.4);background:rgba(124,58,237,.09)}.tracked-choice.selected{border-color:#c084fc;background:rgba(124,58,237,.2)}.tracked-choice strong,.tracked-choice small{display:block}.tracked-choice small{color:rgba(255,255,255,.58);margin-top:4px}.tracked-choice>span{white-space:nowrap;font-weight:900;color:#ddd6fe}
 
     .combined-list{display:flex;flex-direction:column;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.1)}
@@ -905,19 +769,12 @@ export default function SinglesCentrePage() {
     @media(max-width:980px){.stats-grid,.grid,.platform-grid{grid-template-columns:repeat(2,1fr)}.card-table-head{display:none}.card-row{grid-template-columns:repeat(2,1fr);border:1px solid rgba(255,255,255,.1);border-radius:16px;margin-top:10px}.table-head{display:none}.sale-row{grid-template-columns:repeat(2,1fr);border:1px solid rgba(255,255,255,.1);border-radius:16px;margin-top:10px}.draft-row,.tracked-picker-grid,.stream-item-row{grid-template-columns:repeat(2,1fr)}.combined-row{grid-template-columns:1fr 100px 130px auto}}
     @media(max-width:640px){.page{padding:14px}.top,.panel-head,.payrun-head{flex-direction:column;align-items:flex-start}.stats-grid,.grid,.platform-grid,.summary-strip{grid-template-columns:1fr}.span-2,.span-4{grid-column:span 1}.card-row,.sale-row,.draft-row,.tracked-picker-grid,.combined-row,.stream-item-row{grid-template-columns:1fr}.calendar-grid{gap:4px}.day{min-height:118px;padding:6px}.day-metric,.day-profit-line,.day-streams{font-size:.58rem}.picker-submenu{position:static;width:auto;max-height:260px;margin:4px 0 6px}.stream-picker-menu{width:min(240px,calc(100vw - 48px))}.row-actions{width:100%}.action{flex:1}}
   `}</style><div className="wrap">
-    <div className="top"><div><div className="eyebrow">Collectiverse Admin</div><h1>🛒 Singles Centre</h1><p>Collections, tracked cards, sales and fortnightly performance.</p></div><Link className="button" href="/admin">← Admin Home</Link></div>
+    <div className="top"><div><div className="eyebrow">Collectiverse Admin</div><h1>🛒 Singles Centre</h1><p>Collections, tracked cards, sealed stock, giveaways and sales management.</p></div><Link className="button" href="/admin">← Admin Home</Link></div>
     <div className="tabs">
-      {([['dashboard','📊 Dashboard'],['active','⭐ Active'],['sold','💰 Sold'],['ebay','🛒 eBay'],['streaming','🎥 Streaming'],['website','🌐 Website'],['sales','📅 Sales'],['purchases','📥 Purchases']] as [Tab,string][]).map(([id,label]) => <button key={id} className={`tab ${tab === id ? 'active' : ''}`} onClick={() => setTab(id)}>{label}</button>)}
+      {([['active','⭐ Active'],['sold','💰 Sold'],['ebay','🛒 eBay'],['streaming','🎥 Streaming'],['website','🌐 Website'],['sales','💷 Sales'],['purchases','📥 Purchases']] as [Tab,string][]).map(([id,label]) => <button key={id} className={`tab ${tab === id ? 'active' : ''}`} onClick={() => setTab(id)}>{label}</button>)}
     </div>
     {message && <div className="message">{message}</div>}
     {loading ? <section className="panel">Loading Singles Centre…</section> : <>
-      {tab === 'dashboard' && <>
-        <section className="panel"><div className="payrun-head"><div><div className="eyebrow">Fortnightly Payrun</div><h2>{shortDate(selectedPayrun.start)} → {shortDate(selectedPayrun.end)}</h2></div><div className="payrun-nav"><button className="button" onClick={() => setPayrunOffset((value) => value - 1)}>Previous</button><button className="button" onClick={() => setPayrunOffset(0)}>Current</button><button className="button" onClick={() => setPayrunOffset((value) => value + 1)}>Next</button></div></div>
-          <div className="stats-grid"><StatCard label="2-Week Gross Sales" value={money(payrunTotals.gross)} sub={`${payrunTotals.transactions} sale entries`} /><StatCard label="2-Week Net Sales" value={money(payrunTotals.net)} sub="After platform fees" /><StatCard label="2-Week Profit" value={money(payrunTotals.profit)} sub={`${payrunChange >= 0 ? '+' : ''}${payrunChange.toFixed(1)}% vs previous`} /><StatCard label="Sealed & Cards Sold" value={String(payrunTotals.count)} sub={`${(payrunTotals.count / 14).toFixed(1)} average per day`} /></div>
-        </section>
-        <section className="panel"><h2>Platform Performance</h2><div className="platform-grid" style={{marginTop:14}}>{platformTotals.map((item) => <div className="platform-card" key={item.platform}><h3>{platformLabels[item.platform]}</h3><strong>{money(item.net)}</strong><small>{item.count} sealed & cards sold · {money(item.profit)} profit</small></div>)}</div></section>
-        <section className="panel"><div className="panel-head"><div><h2>Live Inventory</h2><p>Current stock value across every Singles Centre inventory type.</p></div><div style={{textAlign:'right'}}><small className="stat-label">Total Inventory Value</small><div className="stat-value">{money(totalInventoryValue)}</div></div></div><div className="inventory-grid" style={{marginTop:14}}><div className="inventory-card"><small>Collection Inventory</small><strong>{collectionRemainingQuantity.toLocaleString()} cards</strong><span>{money(collectionAverageCost)} average · {money(collectionInventoryValue)} value</span></div><div className="inventory-card"><small>Tracked Cards</small><strong>{activeCards.length.toLocaleString()} cards</strong><span>{money(activeCardCost)} inventory value</span></div><div className="inventory-card"><small>Sealed Products</small><strong>{sealedInventory.reduce((sum,batch) => sum + number(batch.quantity_remaining),0).toLocaleString()} items</strong><span>{money(sealedInventoryValue)} inventory value</span></div><div className="inventory-card"><small>Giveaway Stock</small><strong>{giveawayInventory.reduce((sum,batch) => sum + number(batch.quantity_remaining),0).toLocaleString()} items</strong><span>{money(giveawayInventoryValue)} inventory value</span></div></div></section>
-      </>}
       {tab === 'active' && <><section className="panel slim"><div className="panel-head"><div><h2>Active Individually Tracked Cards</h2><p>Available, listed and reserved singles.</p></div><div className="row-actions"><button className="button primary" onClick={() => setShowPromoteCard(true)}>+ Add Tracked Card from Collection</button><div className="grid" style={{width:'min(520px,100%)'}}><input className="input span-2" placeholder="Search card, set, number or collection…" value={search} onChange={(e) => setSearch(e.target.value)} /><select className="select span-2" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)}><option value="all">All statuses</option><option value="available">Available</option><option value="listed">Listed</option><option value="reserved">Reserved</option></select></div></div></div></section><CardRows rows={filteredCards} /></>}
       {tab === 'sold' && <section className="panel"><h2>All Sold Cards</h2><div style={{marginTop:14}}><SaleTable rows={sales} /></div></section>}
       {tab === 'ebay' && <PlatformTab platform="ebay" />}
@@ -971,8 +828,6 @@ export default function SinglesCentrePage() {
             <button className="button primary" style={{marginTop:14}} onClick={saveTrackedSale}>Save Tracked Card Sale</button>
           </>}
         </section>
-        <section className="panel"><div className="calendar-head"><button className="button" onClick={() => changeMonth(-1)}>←</button><h2>{monthLabel(selectedYear,selectedMonth)}</h2><button className="button" onClick={() => changeMonth(1)}>→</button></div><div className="calendar-grid">{['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((day) => <div className="weekday" key={day}>{day}</div>)}{calendarDays.map((day) => { const totals = summariseSales(salesByDate.get(day.key) || []); const date = parseDate(day.key); const weekday = date.toLocaleDateString('en-GB',{weekday:'short'}); return <button key={day.key} className={`day ${day.inMonth ? '' : 'out'} ${selectedDate === day.key ? 'selected' : ''}`} onClick={() => setSelectedDate(day.key)}><div className="day-number">{weekday} {date.getDate()}</div><div className="day-metric">Sales: {money(totals.gross)}</div><div className="day-metric">After Fees: {money(totals.net)}</div><div className="day-metric">Sealed & Cards Sold: {totals.count}</div><div className={`day-profit-line ${totals.profit < 0 ? 'loss' : ''}`}>Profit: {money(totals.profit)}</div><div className="day-streams">{totals.transactions} stream{totals.transactions === 1 ? '' : 's'}</div></button>})}</div></section>
-        <section className="panel"><h2>{fullDate(selectedDate)}</h2><div className="summary-strip"><div className="summary-item"><small>Sealed & Cards Sold</small><strong>{selectedDayTotals.count}</strong></div><div className="summary-item"><small>Gross Sales</small><strong>{money(selectedDayTotals.gross)}</strong></div><div className="summary-item"><small>Net Sales</small><strong>{money(selectedDayTotals.net)}</strong></div><div className="summary-item"><small>Profit</small><strong>{money(selectedDayTotals.profit)}</strong></div></div><div style={{marginTop:14}}><SaleTable rows={selectedDaySales} /></div></section>
       </>}
       {tab === 'purchases' && <>
         <section className="panel"><h2>Add Purchase</h2><p>Add collection inventory, individually tracked cards, or sealed products for streams and giveaways.</p>
