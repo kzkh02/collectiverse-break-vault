@@ -33,7 +33,8 @@ function getTierStyle(tier: string | null) {
 
 export default function HomePage() {
   const [username, setUsername] = useState('')
-  const [featuredHit, setFeaturedHit] = useState<any>(null)
+  const [featuredHits, setFeaturedHits] = useState<any[]>([])
+  const [featuredIndex, setFeaturedIndex] = useState(0)
   const router = useRouter()
 
   function searchVault() {
@@ -41,48 +42,79 @@ export default function HomePage() {
     router.push(`/collector/${username.trim()}`)
   }
 
-  async function loadFeaturedHit() {
-    const { data } = await supabase
+  async function loadFeaturedHits() {
+    const { data, error } = await supabase
       .from('entries')
       .select('*')
       .eq('featured_hit', true)
       .eq('is_hit', true)
       .order('revealed_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
+      .limit(3)
 
-    if (!data) {
-      setFeaturedHit(null)
+    if (error || !data?.length) {
+      setFeaturedHits([])
+      setFeaturedIndex(0)
       return
     }
 
-    const { data: collector } = await supabase
-      .from('collectors')
-      .select('whatnot_name')
-      .eq('id', data.collector_id)
-      .single()
+    const collectorIds = [...new Set(data.map((entry: any) => entry.collector_id).filter(Boolean))]
+    const breakIds = [...new Set(data.map((entry: any) => entry.break_id).filter(Boolean))]
 
-    const { data: breakData } = await supabase
-      .from('breaks')
-      .select('stream_datetime')
-      .eq('id', data.break_id)
-      .single()
+    const [{ data: collectors }, { data: breaks }] = await Promise.all([
+      collectorIds.length
+        ? supabase.from('collectors').select('id, whatnot_name').in('id', collectorIds)
+        : Promise.resolve({ data: [] as any[] }),
+      breakIds.length
+        ? supabase.from('breaks').select('id, stream_datetime').in('id', breakIds)
+        : Promise.resolve({ data: [] as any[] }),
+    ])
 
-    setFeaturedHit({
-      ...data,
-      collector_name: collector?.whatnot_name,
-      stream_datetime: breakData?.stream_datetime,
-    })
+    const collectorsById = new Map(
+      (collectors || []).map((collector: any) => [String(collector.id), collector.whatnot_name])
+    )
+    const breaksById = new Map(
+      (breaks || []).map((item: any) => [String(item.id), item.stream_datetime])
+    )
+
+    setFeaturedHits(
+      data.map((entry: any) => ({
+        ...entry,
+        collector_name: collectorsById.get(String(entry.collector_id)),
+        stream_datetime: breaksById.get(String(entry.break_id)),
+      }))
+    )
+    setFeaturedIndex(0)
   }
 
   useEffect(() => {
-    loadFeaturedHit()
+    loadFeaturedHits()
   }, [])
 
+  useEffect(() => {
+    if (featuredHits.length <= 1) return
+
+    const interval = window.setInterval(() => {
+      setFeaturedIndex((current) => (current + 1) % featuredHits.length)
+    }, 6500)
+
+    return () => window.clearInterval(interval)
+  }, [featuredHits.length])
+
+  const featuredHit = featuredHits[featuredIndex] || null
   const tier = getTierStyle(featuredHit?.hit_tier || null)
   const showCosmic = ['ir', 'mar', 'gold', 'sir'].includes(
     String(featuredHit?.hit_tier || '').toLowerCase()
   )
+
+  function showPreviousFeatured() {
+    if (featuredHits.length <= 1) return
+    setFeaturedIndex((current) => (current - 1 + featuredHits.length) % featuredHits.length)
+  }
+
+  function showNextFeatured() {
+    if (featuredHits.length <= 1) return
+    setFeaturedIndex((current) => (current + 1) % featuredHits.length)
+  }
 
  return (
   <main className="page">
@@ -192,6 +224,54 @@ export default function HomePage() {
           font-size: .82rem;
           margin-top: 10px;
           line-height: 1.45;
+        }
+
+        .featured-carousel-controls {
+          position: relative;
+          z-index: 3;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          margin-top: 12px;
+        }
+
+        .featured-arrow {
+          width: 32px;
+          height: 32px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 999px;
+          border: 1px solid rgba(255,255,255,.18);
+          background: rgba(0,0,0,.24);
+          color: white;
+          font-size: 1rem;
+          font-weight: 950;
+          cursor: pointer;
+        }
+
+        .featured-dots {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 7px;
+        }
+
+        .featured-dot {
+          width: 8px;
+          height: 8px;
+          padding: 0;
+          border: 0;
+          border-radius: 999px;
+          background: rgba(255,255,255,.32);
+          cursor: pointer;
+          transition: width .18s ease, background .18s ease;
+        }
+
+        .featured-dot.active {
+          width: 22px;
+          background: #facc15;
         }
 
         .search-card {
@@ -741,6 +821,40 @@ export default function HomePage() {
               <p className="featured-text">The next huge pull will appear here.</p>
             )}
           </div>
+
+          {featuredHits.length > 1 && (
+            <div className="featured-carousel-controls" aria-label="Featured hits carousel">
+              <button
+                type="button"
+                className="featured-arrow"
+                onClick={showPreviousFeatured}
+                aria-label="Previous featured hit"
+              >
+                ‹
+              </button>
+
+              <div className="featured-dots">
+                {featuredHits.map((hit, index) => (
+                  <button
+                    type="button"
+                    key={hit.id}
+                    className={`featured-dot ${index === featuredIndex ? 'active' : ''}`}
+                    onClick={() => setFeaturedIndex(index)}
+                    aria-label={`Show featured hit ${index + 1}`}
+                  />
+                ))}
+              </div>
+
+              <button
+                type="button"
+                className="featured-arrow"
+                onClick={showNextFeatured}
+                aria-label="Next featured hit"
+              >
+                ›
+              </button>
+            </div>
+          )}
         </section>
 
         <section className="search-card">

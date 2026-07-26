@@ -90,7 +90,8 @@ export default function BreakPage() {
 
   const totalSpots = entries.length
   const hitsMarked = entries.filter((entry) => entry.is_hit).length
-  const featuredHit = entries.find((entry) => entry.featured_hit)
+  const featuredHits = entries.filter((entry) => entry.featured_hit)
+  const [globalFeaturedCount, setGlobalFeaturedCount] = useState(0)
   const breakStatus = breakData?.status || 'open'
 
   const collectorSummary = useMemo(() => {
@@ -168,6 +169,14 @@ export default function BreakPage() {
       setMessage(`Entries error: ${entriesError.message}`)
       return
     }
+
+    const { count: featuredCount } = await supabase
+      .from('entries')
+      .select('*', { count: 'exact', head: true })
+      .eq('featured_hit', true)
+      .eq('is_hit', true)
+
+    setGlobalFeaturedCount(featuredCount || 0)
 
     const collectorIds = [
       ...new Set((entriesData || []).map((entry: any) => entry.collector_id).filter(Boolean)),
@@ -328,17 +337,114 @@ export default function BreakPage() {
   }
 
   async function featureHit(entryId: string) {
-    const confirmed = window.confirm('Set this as the homepage featured hit?')
+    const entry = entries.find((item) => item.id === entryId)
+    if (!entry?.is_hit) {
+      setMessage('Only marked hits can be featured.')
+      return
+    }
+
+    if (entry.featured_hit) {
+      const { error } = await supabase
+        .from('entries')
+        .update({ featured_hit: false })
+        .eq('id', entryId)
+
+      if (error) {
+        setMessage(error.message)
+        return
+      }
+
+      setEntries((current) =>
+        current.map((item) =>
+          item.id === entryId ? { ...item, featured_hit: false } : item
+        )
+      )
+      setGlobalFeaturedCount((current) => Math.max(0, current - 1))
+      setMessage('Featured hit removed from the homepage')
+      return
+    }
+
+    const confirmed = window.confirm(
+      globalFeaturedCount >= 3
+        ? 'The homepage already has 3 featured hits. Add this one and automatically remove the oldest featured hit?'
+        : `Add this to the homepage featured carousel? ${globalFeaturedCount + 1}/3 slots will be used.`
+    )
     if (!confirmed) return
 
-    await supabase
-      .from('entries')
-      .update({ featured_hit: false })
-      .eq('featured_hit', true)
+    let removedEntryId: string | null = null
+
+    if (globalFeaturedCount >= 3) {
+      const { data: oldestFeatured, error: oldestError } = await supabase
+        .from('entries')
+        .select('id')
+        .eq('featured_hit', true)
+        .eq('is_hit', true)
+        .order('revealed_at', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+
+      if (oldestError) {
+        setMessage(oldestError.message)
+        return
+      }
+
+      if (oldestFeatured?.id) {
+        removedEntryId = String(oldestFeatured.id)
+
+        const { error: removeError } = await supabase
+          .from('entries')
+          .update({ featured_hit: false })
+          .eq('id', removedEntryId)
+
+        if (removeError) {
+          setMessage(removeError.message)
+          return
+        }
+      }
+    }
 
     const { error } = await supabase
       .from('entries')
       .update({ featured_hit: true })
+      .eq('id', entryId)
+
+    if (error) {
+      if (removedEntryId) {
+        await supabase
+          .from('entries')
+          .update({ featured_hit: true })
+          .eq('id', removedEntryId)
+      }
+
+      setMessage(error.message)
+      return
+    }
+
+    setEntries((current) =>
+      current.map((item) => {
+        if (item.id === entryId) return { ...item, featured_hit: true }
+        if (removedEntryId && item.id === removedEntryId) {
+          return { ...item, featured_hit: false }
+        }
+        return item
+      })
+    )
+
+    setGlobalFeaturedCount((current) => (current >= 3 ? 3 : current + 1))
+    setMessage(
+      removedEntryId
+        ? 'Hit added and the oldest featured hit was removed automatically'
+        : 'Hit added to the homepage featured carousel'
+    )
+  }
+
+  async function clearFeaturedHit(entryId: string) {
+    const confirmed = window.confirm('Remove this hit from the homepage featured carousel?')
+    if (!confirmed) return
+
+    const { error } = await supabase
+      .from('entries')
+      .update({ featured_hit: false })
       .eq('id', entryId)
 
     if (error) {
@@ -347,31 +453,12 @@ export default function BreakPage() {
     }
 
     setEntries((current) =>
-      current.map((entry) => ({
-        ...entry,
-        featured_hit: entry.id === entryId,
-      }))
+      current.map((entry) =>
+        entry.id === entryId ? { ...entry, featured_hit: false } : entry
+      )
     )
-
-    setMessage('Featured hit updated')
-  }
-
-  async function clearFeaturedHit() {
-    const confirmed = window.confirm('Clear the current homepage featured hit?')
-    if (!confirmed) return
-
-    const { error } = await supabase
-      .from('entries')
-      .update({ featured_hit: false })
-      .eq('featured_hit', true)
-
-    if (error) {
-      setMessage(error.message)
-      return
-    }
-
-    setEntries((current) => current.map((entry) => ({ ...entry, featured_hit: false })))
-    setMessage('Featured hit cleared')
+    setGlobalFeaturedCount((current) => Math.max(0, current - 1))
+    setMessage('Featured hit removed')
   }
 
   async function completeBreak() {
@@ -618,6 +705,30 @@ export default function BreakPage() {
           font-weight: 750;
         }
 
+        .featured-list {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          flex: 1;
+        }
+
+        .featured-item {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 12px;
+          padding: 11px 12px;
+          border-radius: 15px;
+          border: 1px solid rgba(255,255,255,.12);
+          background: rgba(0,0,0,.14);
+        }
+
+        .featured-limit {
+          color: #fde68a;
+          font-weight: 900;
+          white-space: nowrap;
+        }
+
         .tools {
           display: grid;
           grid-template-columns: 1fr auto;
@@ -803,26 +914,39 @@ export default function BreakPage() {
         {message && <div className="message">{message}</div>}
 
         <section className="panel featured-panel">
-          <div>
-            <div className="panel-title">⭐ Current Featured Hit</div>
-            {featuredHit ? (
-              <>
-                <div className="featured-name">{featuredHit.spot_name}</div>
-                <div className="featured-sub">
-                  {featuredHit.collector_name} · {tierEmoji(featuredHit.hit_tier)}{' '}
-                  {tierLabel(featuredHit.hit_tier)}
+          <div className="featured-list">
+            <div>
+              <div className="panel-title">⭐ Homepage Featured Hits</div>
+              <div className="featured-sub">
+                Add up to 3 hits across all breaks. They will rotate in a carousel on the homepage.
+              </div>
+            </div>
+
+            {featuredHits.length > 0 ? (
+              featuredHits.map((featuredHit) => (
+                <div className="featured-item" key={featuredHit.id}>
+                  <div>
+                    <div className="featured-name">{displayHitName(featuredHit)}</div>
+                    <div className="featured-sub">
+                      {featuredHit.collector_name} · {tierEmoji(featuredHit.hit_tier)}{' '}
+                      {tierLabel(featuredHit.hit_tier)}
+                    </div>
+                  </div>
+
+                  <button
+                    className="admin-button"
+                    onClick={() => clearFeaturedHit(featuredHit.id)}
+                  >
+                    Remove
+                  </button>
                 </div>
-              </>
+              ))
             ) : (
-              <div className="featured-sub">No featured hit selected.</div>
+              <div className="featured-sub">No hits from this break are currently featured.</div>
             )}
           </div>
 
-          {featuredHit && (
-            <button className="admin-button" onClick={clearFeaturedHit}>
-              Clear Featured
-            </button>
-          )}
+          <div className="featured-limit">{globalFeaturedCount}/3 used</div>
         </section>
 
         <section className="panel">
