@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation'
 import { supabase } from '../../../lib/supabase'
 
 type Tab = 'latest' | 'lifetime' | 'hall'
-type HitTier = 'sir' | 'gold' | 'mar' | 'ir' | 'sr' | 'ex'
+type HitTier = 'sir' | 'gold' | 'mar' | 'ir' | 'sr' | 'ex' | 'clc'
 type RankKey = 'overall' | HitTier
 type RankTotals = Record<RankKey, number>
 
@@ -30,9 +30,10 @@ const tierLabels: Record<string, string> = {
   ir: 'IR',
   sr: 'SR',
   ex: 'EX',
+  clc: 'CLC',
 }
 
-const hitTiers: HitTier[] = ['sir', 'gold', 'mar', 'ir', 'sr', 'ex']
+const hitTiers: HitTier[] = ['sir', 'gold', 'mar', 'ir', 'sr', 'ex', 'clc']
 const showcaseTiers = ['sir', 'gold', 'mar']
 
 const DEMO_USERNAME = 'demo'
@@ -75,8 +76,117 @@ function getBreakInfo(name: string | null) {
   }
 }
 
+function normaliseImageKey(value: string) {
+  return value.toLowerCase().trim().replace(/\s+/g, ' ')
+}
+
+function canonicalImageName(value: string) {
+  return String(value || '')
+    .normalize('NFKD')
+    .replace(/^[\p{Extended_Pictographic}\p{Emoji_Presentation}\uFE0F\u200D\s]+/gu, '')
+    .replace(/\s*·?\s*Extra Hit\s*\d*$/i, '')
+    .replace(/\s*\([^)]*\)\s*$/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, ' ')
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, ' ')
+}
+
+function resolveCollectorHitImage(
+  hitImages: Record<string, string>,
+  setName: string,
+  rawName: string,
+  tier: string | null
+) {
+  const setKey = normaliseImageKey(setName)
+  const tierLabel = tierLabels[String(tier || '').toLowerCase()] || String(tier || '').replace(/_/g, ' ').toUpperCase()
+  const cleanBase = canonicalImageName(rawName)
+    .replace(/\s+(sir|gold|mar|ir|sr|ex|clc)$/i, '')
+    .trim()
+  let cleanTier = canonicalImageName(tierLabel)
+
+  // 30th compatibility: legacy Umbreon / Espeon rows may still carry IR,
+  // but their actual cards/images are EX.
+  if (
+    cleanTier === 'ir' &&
+    (cleanBase === 'umbreon' || cleanBase === 'espeon')
+  ) {
+    cleanTier = 'ex'
+  }
+
+  const wanted = cleanTier ? `${cleanBase} ${cleanTier}`.trim() : cleanBase
+
+  for (const [key, url] of Object.entries(hitImages)) {
+    const separator = key.indexOf('::')
+    if (separator === -1) continue
+
+    const rowSet = key.slice(0, separator)
+    const rowCard = key.slice(separator + 2)
+    if (normaliseImageKey(rowSet) !== setKey) continue
+
+    const canonicalRow = canonicalImageName(rowCard)
+    const canonicalRowVariant = canonicalRow
+      .replace(/\s+ex\s+(sir|gold|mar|ir|sr|clc)$/i, ' $1')
+      .trim()
+
+    if (canonicalRow === wanted || canonicalRowVariant === wanted) return url
+
+    // Legacy split-card images were uploaded as e.g. "Salazzle (IR)".
+    // Only use that legacy row when its bracketed tier matches this hit.
+    const legacyBracketTier = String(rowCard).match(/\((SIR|GOLD|MAR|IR|SR|EX|CLC)\)\s*$/i)?.[1] || ''
+    if (
+      cleanTier &&
+      canonicalImageName(legacyBracketTier) === cleanTier &&
+      canonicalRow === cleanBase
+    ) return url
+
+    if (!cleanTier && canonicalRow === cleanBase) return url
+  }
+
+  return ''
+}
+
+function cleanDisplayCardName(value: string) {
+  return String(value || '')
+    .replace(/^[\p{Extended_Pictographic}\p{Emoji_Presentation}\uFE0F\u200D\s]+/gu, '')
+    .trim()
+}
+
+function baseCardName(value: string) {
+  return String(value || '')
+    .replace(/ · Extra Hit \d+$/i, '')
+    .replace(/\s*\([^)]*\)\s*$/, '')
+    .trim()
+}
+
+function cardVariantName(value: string, tier: string | null) {
+  const base = baseCardName(value)
+  const label = tierLabels[String(tier || '').toLowerCase()] || String(tier || '').replace(/_/g, ' ').toUpperCase()
+  return tier ? `${base} ${label}`.trim() : base
+}
+
+function imageVariantName(value: string, tier: string | null) {
+  const base = baseCardName(value).replace(/\s+(SIR|GOLD|MAR|IR|SR|EX|CLC)$/i, '').trim()
+  const label = tierLabels[String(tier || '').toLowerCase()] || String(tier || '').replace(/_/g, ' ').toUpperCase()
+  return tier ? `${base} ${label}`.trim() : base
+}
+
+function visibleCardName(value: string, tier?: string | null) {
+  const cleaned = baseCardName(value)
+    .replace(/^[^A-Za-z0-9]+/, '')
+    .replace(/\s*·\s*Extra Hit\s*\d*$/i, '')
+    .replace(/\s*\([^)]*\)\s*$/g, '')
+    .trim()
+
+  // The rarity is already shown in the tier badge.
+  // Keep stored hit_name unchanged; only remove the redundant visible EX suffix.
+  return cleaned.replace(/\s+EX$/i, '').trim()
+}
+
 function getTierClass(tier: string | null) {
   switch (String(tier || '').toLowerCase().trim()) {
+    case 'clc':
+      return 'hit-clc'
     case 'sir':
       return 'hit-sir'
     case 'gold':
@@ -96,6 +206,8 @@ function getTierClass(tier: string | null) {
 
 function getTierEmoji(tier: string | null) {
   switch (tier) {
+    case 'clc':
+      return '📽️'
     case 'sir':
       return '👑'
     case 'gold':
@@ -136,6 +248,7 @@ function getEmptyRankTotals(): RankTotals {
     ir: 0,
     sr: 0,
     ex: 0,
+    clc: 0,
   }
 }
 
@@ -202,6 +315,7 @@ export default function VaultPage() {
   const [selectedDate, setSelectedDate] = useState(todayDate())
   const [collector, setCollector] = useState<any>(null)
   const [hits, setHits] = useState<any[]>([])
+  const [hitImages, setHitImages] = useState<Record<string, string>>({})
   const [enteredBreakDates, setEnteredBreakDates] = useState<string[]>([])
   const [hallOfFame, setHallOfFame] = useState<HallOfFameCollector[]>([])
   const [bestHitIndex, setBestHitIndex] = useState(0)
@@ -216,6 +330,7 @@ export default function VaultPage() {
     ir: null,
     sr: null,
     ex: null,
+    clc: null,
   })
 
   async function loadVault() {
@@ -293,6 +408,29 @@ export default function VaultPage() {
         break_name: breakMap[hit.break_id]?.break_name || 'Unknown Break',
         stream_datetime: breakMap[hit.break_id]?.stream_datetime || null,
       }))
+
+      const setKeys = [
+        ...new Set(
+          hitsWithBreaks
+            .map((hit) => normaliseImageKey(getBreakInfo(hit.break_name).setName))
+            .filter(Boolean)
+        ),
+      ]
+
+      if (setKeys.length > 0) {
+        const { data: imageRows } = await supabase
+          .from('hit_images')
+          .select('set_name_normalized, hit_name_normalized, image_url')
+          .in('set_name_normalized', setKeys)
+
+        const imageMap: Record<string, string> = {}
+        ;(imageRows || []).forEach((row: any) => {
+          imageMap[`${row.set_name_normalized}::${row.hit_name_normalized}`] = String(row.image_url)
+        })
+        setHitImages(imageMap)
+      } else {
+        setHitImages({})
+      }
 
       setHits(hitsWithBreaks)
 
@@ -377,6 +515,7 @@ export default function VaultPage() {
         ir: getRank('ir'),
         sr: getRank('sr'),
         ex: getRank('ex'),
+        clc: getRank('clc'),
       }
 
       setRanks(currentRanks)
@@ -429,6 +568,7 @@ export default function VaultPage() {
     ir: hits.filter((h) => h.hit_tier === 'ir').length,
     sr: hits.filter((h) => h.hit_tier === 'sr').length,
     ex: hits.filter((h) => h.hit_tier === 'ex').length,
+    clc: hits.filter((h) => h.hit_tier === 'clc').length,
   }
 
   const collectorTitle = getCollectorTitle(ranks.overall)
@@ -474,45 +614,58 @@ export default function VaultPage() {
 
   const selectedDateEntered = enteredBreakDates.includes(selectedDate)
 
-  const selectedMonth = new Date(selectedDate)
-  const year = selectedMonth.getFullYear()
-  const month = selectedMonth.getMonth()
+  const selectedDateObject = new Date(`${selectedDate}T12:00:00`)
+  const selectedDayIndex = selectedDateObject.getDay()
+  const mondayOffset = selectedDayIndex === 0 ? -6 : 1 - selectedDayIndex
+  const weekStart = new Date(selectedDateObject)
+  weekStart.setDate(selectedDateObject.getDate() + mondayOffset)
 
-  const daysInMonth = new Date(year, month + 1, 0).getDate()
-  const firstDay = new Date(year, month, 1).getDay()
+  const weekItems = Array.from({ length: 7 }, (_, index) => {
+    const dayDate = new Date(weekStart)
+    dayDate.setDate(weekStart.getDate() + index)
 
-  const calendarDays = [
-    ...Array(firstDay).fill(null),
-    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
-  ]
-
-  const calendarItems = calendarDays.map((day, index) => {
-    if (!day) {
-      return {
-        key: `empty-${index}`,
-        day: null,
-        date: '',
-        hasBreak: false,
-        isSelected: false,
-      }
-    }
-
-    const date = `${year}-${String(month + 1).padStart(2, '0')}-${String(
-      day
+    const date = `${dayDate.getFullYear()}-${String(dayDate.getMonth() + 1).padStart(2, '0')}-${String(
+      dayDate.getDate()
     ).padStart(2, '0')}`
 
     return {
       key: date,
-      day,
       date,
+      dayName: dayDate.toLocaleDateString('en-GB', { weekday: 'short' }),
+      dayNumber: dayDate.getDate(),
+      monthName: dayDate.toLocaleDateString('en-GB', { month: 'short' }),
       hasBreak: enteredBreakDates.includes(date),
       isSelected: selectedDate === date,
     }
   })
 
-  function changeMonth(amount: number) {
-    const nextDate = new Date(year, month + amount, 1, 12)
-    setSelectedDate(nextDate.toISOString().split('T')[0])
+  const weekEnd = new Date(weekStart)
+  weekEnd.setDate(weekStart.getDate() + 6)
+
+  const weekLabel =
+    weekStart.getMonth() === weekEnd.getMonth()
+      ? `${weekStart.getDate()}–${weekEnd.getDate()} ${weekEnd.toLocaleDateString('en-GB', {
+          month: 'long',
+          year: 'numeric',
+        })}`
+      : `${weekStart.toLocaleDateString('en-GB', {
+          day: 'numeric',
+          month: 'short',
+        })} – ${weekEnd.toLocaleDateString('en-GB', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
+        })}`
+
+  function changeWeek(amount: number) {
+    const nextDate = new Date(selectedDateObject)
+    nextDate.setDate(nextDate.getDate() + amount * 7)
+
+    setSelectedDate(
+      `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}-${String(
+        nextDate.getDate()
+      ).padStart(2, '0')}`
+    )
   }
 
   function changeBestHit(amount: number) {
@@ -532,47 +685,184 @@ export default function VaultPage() {
     return <div className="rank-pill">{rank ? `Rank #${rank}` : 'Unranked'}</div>
   }
 
+
+  function RarityEffects({ tier }: { tier: string }) {
+    return (
+      <div className="rarity-fx rarity-fx-v4" aria-hidden="true">
+        <span className="fx-ambient" />
+        <span className="fx-primary" />
+        <span className="fx-secondary" />
+        <span className="fx-detail" />
+        <span className="fx-extra" />
+        <span className="fx-flare" />
+      
+        {tier === 'ir' && (
+          <svg className="ir-spectral-field" viewBox="0 0 1000 260" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="irRibbonA" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#fb7185" stopOpacity="0" />
+                <stop offset="24%" stopColor="#f472b6" stopOpacity=".72" />
+                <stop offset="48%" stopColor="#c4b5fd" stopOpacity=".95" />
+                <stop offset="72%" stopColor="#67e8f9" stopOpacity=".78" />
+                <stop offset="100%" stopColor="#67e8f9" stopOpacity="0" />
+              </linearGradient>
+              <linearGradient id="irRibbonB" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#22d3ee" stopOpacity="0" />
+                <stop offset="30%" stopColor="#67e8f9" stopOpacity=".68" />
+                <stop offset="58%" stopColor="#f0abfc" stopOpacity=".90" />
+                <stop offset="82%" stopColor="#fb7185" stopOpacity=".62" />
+                <stop offset="100%" stopColor="#fb7185" stopOpacity="0" />
+              </linearGradient>
+              <filter id="irSpectralGlow" x="-30%" y="-80%" width="160%" height="260%">
+                <feGaussianBlur stdDeviation="3.2" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            </defs>
+            <g filter="url(#irSpectralGlow)">
+              <path className="ir-ribbon ir-ribbon-a" stroke="url(#irRibbonA)" d="M-80 185 C70 50 180 238 330 105 S590 34 720 145 S910 230 1080 75" />
+              <path className="ir-ribbon ir-ribbon-b" stroke="url(#irRibbonB)" d="M-70 70 C90 205 220 8 375 145 S630 238 765 102 S935 20 1070 175" />
+              <path className="ir-ribbon ir-ribbon-c" stroke="url(#irRibbonA)" d="M-90 132 C80 18 240 210 410 82 S680 45 820 164 S960 212 1090 118" />
+            </g>
+          </svg>
+        )}
+      
+        {tier === 'gold' && (
+          <div className="gold-molten-system">
+            <span className="gold-top-pool" />
+            <span className="gold-drip gold-drip-1" />
+            <span className="gold-drip gold-drip-2" />
+            <span className="gold-drip gold-drip-3" />
+            <span className="gold-drip gold-drip-4" />
+            <span className="gold-drip gold-drip-5" />
+            <span className="gold-drip gold-drip-6" />
+            <span className="gold-drip gold-drip-7" />
+            <span className="gold-drip gold-drip-8" />
+            <span className="gold-drop gold-drop-1" />
+            <span className="gold-drop gold-drop-2" />
+            <span className="gold-drop gold-drop-3" />
+          </div>
+        )}
+      
+        {tier === 'sir' && (
+          <>
+            <div className="sir-flash-system">
+              <span className="sir-starburst sir-starburst-1" />
+              <span className="sir-starburst sir-starburst-2" />
+              <span className="sir-rainbow-ring" />
+            </div>
+      
+            <svg className="sir-fracture-system" viewBox="0 0 1000 260" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="sirFractureGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#ffffff" />
+                  <stop offset="24%" stopColor="#67e8f9" />
+                  <stop offset="52%" stopColor="#c4b5fd" />
+                  <stop offset="76%" stopColor="#f0abfc" />
+                  <stop offset="100%" stopColor="#ffffff" />
+                </linearGradient>
+                <filter id="sirFractureGlow" x="-40%" y="-80%" width="180%" height="260%">
+                  <feGaussianBlur stdDeviation="3.5" result="blur" />
+                  <feMerge>
+                    <feMergeNode in="blur" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
+              </defs>
+      
+              <g className="sir-fracture-glow" filter="url(#sirFractureGlow)">
+                <path className="sir-crack sir-crack-main" pathLength="1" stroke="url(#sirFractureGradient)"
+                  d="M505 126 L458 96 L421 108 L374 74 L330 88 L284 48 L238 61 L191 30" />
+                <path className="sir-crack sir-crack-main sir-crack-right" pathLength="1" stroke="url(#sirFractureGradient)"
+                  d="M505 126 L554 103 L598 117 L646 80 L692 96 L738 55 L786 69 L837 36" />
+                <path className="sir-crack sir-crack-down" pathLength="1" stroke="url(#sirFractureGradient)"
+                  d="M505 126 L482 158 L501 181 L470 207 L486 232 L458 269" />
+                <path className="sir-crack sir-crack-up" pathLength="1" stroke="url(#sirFractureGradient)"
+                  d="M505 126 L524 92 L510 67 L539 41 L525 17 L548 -10" />
+      
+                <path className="sir-crack sir-crack-branch branch-one" pathLength="1" stroke="url(#sirFractureGradient)"
+                  d="M374 74 L385 42 L367 20" />
+                <path className="sir-crack sir-crack-branch branch-two" pathLength="1" stroke="url(#sirFractureGradient)"
+                  d="M284 48 L267 83 L239 103" />
+                <path className="sir-crack sir-crack-branch branch-three" pathLength="1" stroke="url(#sirFractureGradient)"
+                  d="M646 80 L630 47 L650 23" />
+                <path className="sir-crack sir-crack-branch branch-four" pathLength="1" stroke="url(#sirFractureGradient)"
+                  d="M738 55 L758 92 L790 109" />
+                <path className="sir-crack sir-crack-branch branch-five" pathLength="1" stroke="url(#sirFractureGradient)"
+                  d="M470 207 L433 196 L408 216" />
+                <path className="sir-crack sir-crack-branch branch-six" pathLength="1" stroke="url(#sirFractureGradient)"
+                  d="M539 41 L574 54 L601 35" />
+              </g>
+      
+              <circle className="sir-fracture-core" cx="505" cy="126" r="5" />
+            </svg>
+          </>
+        )}
+      
+        {tier === 'mar' && (
+          <svg className="mar-electric-field" viewBox="0 0 1000 260" preserveAspectRatio="none">
+            <defs>
+              <filter id="marElectricGlow" x="-40%" y="-80%" width="180%" height="260%">
+                <feGaussianBlur stdDeviation="4" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            </defs>
+            <g filter="url(#marElectricGlow)">
+              <path className="electric-arc arc-a" d="M-20 52 L55 43 L91 61 L137 31 L185 55 L231 42 L278 66 L329 34 L377 54 L423 28 L469 51 L518 37 L566 62 L616 39 L662 55 L713 30 L760 52 L810 38 L857 60 L906 34 L1020 51" />
+              <path className="electric-arc arc-b" d="M18 211 L77 191 L121 213 L168 184 L213 205 L260 178 L307 207 L352 187 L398 214 L445 181 L492 203 L539 179 L586 208 L634 185 L681 211 L728 181 L775 204 L824 180 L873 207 L922 185 L1018 210" />
+              <path className="electric-arc arc-c" d="M55 -12 L76 29 L62 55 L91 79 L73 108 L101 133 L79 160 L108 188 L87 214 L113 272" />
+              <path className="electric-arc arc-d" d="M913 -12 L888 27 L906 54 L879 81 L899 109 L870 136 L892 164 L864 191 L886 219 L858 272" />
+              <path className="electric-branch branch-a" d="M278 66 L255 92 L268 109 L244 132" />
+              <path className="electric-branch branch-b" d="M713 30 L733 63 L719 81 L744 105" />
+              <path className="electric-branch branch-c" d="M398 214 L420 190 L411 171 L437 148" />
+              <path className="electric-branch branch-d" d="M870 136 L835 124 L817 143 L788 132" />
+            </g>
+          </svg>
+        )}
+      </div>
+    )
+  }
+
   function HitCard({ hit }: { hit: any }) {
     const tierClass = getTierClass(hit.hit_tier)
-    const showCosmic = ['ir', 'mar', 'gold', 'sir'].includes(hit.hit_tier)
     const breakInfo = getBreakInfo(hit.break_name)
+    const resolvedCardName = imageVariantName(hit.hit_name || hit.spot_name, hit.hit_tier)
+    const displayCardName = visibleCardName(hit.hit_name || hit.spot_name, hit.hit_tier)
+    const imageUrl = resolveCollectorHitImage(
+      hitImages,
+      breakInfo.setName,
+      hit.hit_name || hit.spot_name || '',
+      hit.hit_tier
+    )
 
     return (
       <div className={`hit-card ${tierClass}`}>
-        {showCosmic && (
-          <div className="cosmic-stars">
-            <span>✦</span>
-            <span>✧</span>
-            <span>✦</span>
-            <span>✧</span>
-          </div>
-        )}
+        <RarityEffects tier={hit.hit_tier} />
 
-        {hit.hit_tier === 'gold' && (
-          <div className="planet-field">
-            <span>🪐</span>
-            <span>🌕</span>
-          </div>
-        )}
+        <div className={`hit-layout ${imageUrl ? 'has-image' : ''}`}>
+          {imageUrl && (
+            <div className="hit-card-art-wrap">
+              <img className="hit-card-art" src={imageUrl} alt={resolvedCardName} />
+            </div>
+          )}
 
-        {hit.hit_tier === 'sir' && (
-          <div className="rocket-field">
-            <span>🚀</span>
-            <span>☄️</span>
-          </div>
-        )}
-
-        <div className="hit-content">
+          <div className="hit-content">
           <div className="hit-break">{breakInfo.setName}</div>
 
           {breakInfo.breakNumber && (
             <div className="break-number">BREAK {breakInfo.breakNumber}</div>
           )}
 
-          <h3>{hit.hit_name || hit.spot_name}</h3>
+          <h3>{displayCardName}</h3>
 
           <div className={`hit-badge badge-${hit.hit_tier}`}>
             {tierLabels[hit.hit_tier] || hit.hit_tier}
+          </div>
           </div>
         </div>
       </div>
@@ -925,6 +1215,57 @@ function MessageCard() {
           transform: skewX(-18deg);
           z-index: -1;
           opacity: 0.42;
+        }
+
+        .hit-layout {
+          position: relative;
+          z-index: 2;
+          min-height: 114px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 22px;
+        }
+
+        .hit-layout.has-image {
+          display: grid;
+          grid-template-columns: 122px minmax(0, 1fr);
+        }
+
+        .hit-card-art-wrap {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          min-width: 0;
+        }
+
+        .hit-card-art {
+          display: block;
+          width: 112px;
+          max-height: 156px;
+          object-fit: contain;
+          border-radius: 7px;
+          filter: drop-shadow(0 12px 18px rgba(0,0,0,.48));
+          transform-origin: 50% 50%;
+          backface-visibility: hidden;
+          will-change: transform;
+          animation: cardFaceFloat3D 7.5s ease-in-out infinite;
+        }
+
+        @keyframes cardFaceFloat3D {
+          0%, 100% { transform: perspective(900px) translate3d(0,-1px,0) rotateX(1deg) rotateY(-1deg) scale(1.004); }
+          20% { transform: perspective(900px) translate3d(-2px,-3px,0) rotateX(3.2deg) rotateY(-4.5deg) scale(1.008); }
+          45% { transform: perspective(900px) translate3d(2px,-2px,0) rotateX(-2.8deg) rotateY(4deg) scale(1.01); }
+          70% { transform: perspective(900px) translate3d(1px,-4px,0) rotateX(4deg) rotateY(2.8deg) scale(1.008); }
+          88% { transform: perspective(900px) translate3d(-1px,-2px,0) rotateX(-2deg) rotateY(-3deg) scale(1.006); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .hit-card-art { animation: none !important; }
+        }
+
+        .hit-layout.has-image .hit-content {
+          width: 100%;
         }
 
         .hit-content {
@@ -1781,6 +2122,21 @@ function MessageCard() {
             padding: 16px;
           }
 
+          .hit-layout.has-image {
+            grid-template-columns: 88px minmax(0, 1fr);
+            gap: 12px;
+          }
+
+          .hit-card-art {
+            width: 82px;
+            max-height: 116px;
+          }
+
+          .hit-layout.has-image .hit-break { font-size: .82rem; }
+          .hit-layout.has-image .break-number { padding: 6px 12px; font-size: .78rem; margin-bottom: 9px; }
+          .hit-layout.has-image h3 { font-size: 1.08rem; }
+          .hit-layout.has-image .hit-badge { padding: 7px 18px; font-size: .8rem; margin-top: 10px; }
+
           .hof-podium {
             grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 7px;
@@ -1818,6 +2174,4185 @@ function MessageCard() {
             align-items: flex-start;
           }
         }
+
+        /* Keep the original design; only trim a little vertical space from hit cards. */
+        .hit-card {
+          padding-top: 10px !important;
+          padding-bottom: 10px !important;
+        }
+
+
+        .week-archive {
+          max-width: 100%;
+          padding: 14px 16px;
+          margin-bottom: 16px;
+        }
+
+        .week-header {
+          margin-bottom: 10px;
+        }
+
+        .week-range {
+          margin-top: 3px;
+          opacity: .68;
+          font-size: .76rem;
+          font-weight: 850;
+        }
+
+        .week-strip {
+          display: grid;
+          grid-template-columns: repeat(7, minmax(0, 1fr));
+          gap: 7px;
+        }
+
+        .week-day {
+          min-width: 0;
+          height: 62px;
+          border-radius: 14px;
+          border: 1px solid rgba(255,255,255,.08);
+          background: rgba(255,255,255,.05);
+          color: white;
+          cursor: pointer;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 1px;
+        }
+
+        .week-day-name {
+          opacity: .68;
+          font-size: .64rem;
+          font-weight: 950;
+          text-transform: uppercase;
+        }
+
+        .week-day-number {
+          font-size: 1.02rem;
+          line-height: 1.05;
+          font-weight: 950;
+        }
+
+        .week-day-month {
+          opacity: .55;
+          font-size: .58rem;
+          font-weight: 850;
+          text-transform: uppercase;
+        }
+
+        .week-day.has-break {
+          border-color: rgba(250,204,21,.8);
+          background: rgba(250,204,21,.16);
+          box-shadow: 0 0 14px rgba(250,204,21,.24);
+        }
+
+        .week-day.selected {
+          border: 2px solid #c084fc;
+          background: linear-gradient(135deg, #7c3aed, #c084fc);
+          box-shadow: 0 0 18px rgba(192,132,252,.28);
+        }
+
+        @media (max-width: 620px) {
+          .week-archive {
+            padding: 12px 10px;
+          }
+
+          .week-strip {
+            gap: 4px;
+          }
+
+          .week-day {
+            height: 56px;
+            border-radius: 11px;
+          }
+
+          .week-day-name {
+            font-size: .56rem;
+          }
+
+          .week-day-number {
+            font-size: .92rem;
+          }
+
+          .week-day-month {
+            display: none;
+          }
+        }
+
+
+        /* ===== Premium hit-card visual system =====
+           Restrained dark surfaces; rarity is communicated through motion and light. */
+
+        .hit-card,
+        .showcase-hit-card {
+          --tier-accent: 148, 163, 184;
+          --tier-accent-2: 71, 85, 105;
+          border: 1px solid rgba(var(--tier-accent), .34) !important;
+          background:
+            radial-gradient(circle at 16% 18%, rgba(var(--tier-accent), .075), transparent 34%),
+            linear-gradient(135deg, rgba(8, 13, 28, .985), rgba(13, 20, 39, .97)) !important;
+          box-shadow:
+            0 14px 34px rgba(0,0,0,.28),
+            inset 0 1px 0 rgba(255,255,255,.045) !important;
+          animation: none !important;
+        }
+
+        .hit-card::before,
+        .showcase-hit-card::before {
+          inset: 0 !important;
+          z-index: 0 !important;
+          opacity: 1 !important;
+          background:
+            linear-gradient(115deg, transparent 0 34%, rgba(var(--tier-accent), .06) 45%, transparent 56%),
+            radial-gradient(circle at 78% 30%, rgba(var(--tier-accent), .06), transparent 24%) !important;
+          animation: premiumAmbient 8s ease-in-out infinite !important;
+        }
+
+        .hit-card::after,
+        .showcase-hit-card::after {
+          top: 0 !important;
+          bottom: 0 !important;
+          left: -42% !important;
+          width: 28% !important;
+          height: auto !important;
+          transform: skewX(-18deg) !important;
+          z-index: 1 !important;
+          opacity: 0 !important;
+          background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(var(--tier-accent), .05),
+            rgba(255,255,255,.22),
+            rgba(var(--tier-accent), .08),
+            transparent
+          ) !important;
+          animation: premiumSweep 7s ease-in-out infinite !important;
+          pointer-events: none;
+        }
+
+        .hit-ex { --tier-accent: 59, 130, 246; --tier-accent-2: 96, 165, 250; }
+        .hit-sr { --tier-accent: 139, 92, 246; --tier-accent-2: 192, 132, 252; }
+        .hit-ir { --tier-accent: 244, 114, 182; --tier-accent-2: 251, 146, 60; }
+        .hit-mar { --tier-accent: 34, 211, 238; --tier-accent-2: 96, 165, 250; }
+        .hit-gold { --tier-accent: 212, 175, 55; --tier-accent-2: 250, 204, 21; }
+        .hit-sir { --tier-accent: 167, 139, 250; --tier-accent-2: 34, 211, 238; }
+
+        /* EX: controlled electric edge */
+        .hit-ex {
+          box-shadow:
+            0 14px 34px rgba(0,0,0,.28),
+            inset 0 0 0 1px rgba(59,130,246,.04) !important;
+          animation: exEdge 4.8s ease-in-out infinite !important;
+        }
+
+        /* SR: low, slow violet pulse */
+        .hit-sr::before {
+          background:
+            radial-gradient(circle at 72% 50%, rgba(139,92,246,.14), transparent 27%),
+            radial-gradient(circle at 28% 50%, rgba(192,132,252,.06), transparent 22%) !important;
+          animation: srBreath 5.4s ease-in-out infinite !important;
+        }
+
+        /* IR: foil catching a moving warm light */
+        .hit-ir::after {
+          opacity: .32 !important;
+          background: linear-gradient(
+            100deg,
+            transparent 0 34%,
+            rgba(251,146,60,.08) 41%,
+            rgba(244,114,182,.20) 48%,
+            rgba(255,255,255,.20) 51%,
+            rgba(96,165,250,.08) 57%,
+            transparent 66%
+          ) !important;
+          animation: irFoil 6.2s ease-in-out infinite !important;
+        }
+
+        /* MAR: dark storm surface with intermittent lightning */
+        .hit-mar::before {
+          background:
+            linear-gradient(116deg,
+              transparent 0 43%,
+              rgba(125,211,252,0) 44%,
+              rgba(224,242,254,.92) 44.6%,
+              rgba(34,211,238,.58) 45.1%,
+              transparent 45.8% 49%,
+              rgba(186,230,253,.70) 49.4%,
+              transparent 50.1%),
+            radial-gradient(circle at 68% 48%, rgba(34,211,238,.10), transparent 27%) !important;
+          background-size: 220% 100%, 100% 100% !important;
+          animation: marLightning 5.6s steps(1,end) infinite !important;
+        }
+
+        .hit-mar::after {
+          opacity: .18 !important;
+          background: linear-gradient(90deg, transparent, rgba(34,211,238,.22), transparent) !important;
+          animation: marCharge 5.6s ease-in-out infinite !important;
+        }
+
+        /* Gold: black metal with a travelling specular highlight */
+        .hit-gold {
+          background:
+            radial-gradient(circle at 18% 18%, rgba(212,175,55,.07), transparent 32%),
+            linear-gradient(135deg, #090a0d, #15140f 52%, #090a0d) !important;
+        }
+
+        .hit-gold::after {
+          opacity: .36 !important;
+          background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(212,175,55,.08),
+            rgba(255,244,190,.42),
+            rgba(212,175,55,.10),
+            transparent
+          ) !important;
+          animation: goldSpecular 5.8s ease-in-out infinite !important;
+        }
+
+        /* SIR: restrained holographic refraction, not a rainbow background */
+        .hit-sir::before {
+          background:
+            linear-gradient(
+              118deg,
+              transparent 15%,
+              rgba(244,114,182,.08) 28%,
+              rgba(250,204,21,.07) 38%,
+              rgba(34,211,238,.10) 50%,
+              rgba(167,139,250,.11) 61%,
+              transparent 76%
+            ),
+            radial-gradient(circle at 70% 35%, rgba(255,255,255,.07), transparent 25%) !important;
+          background-size: 190% 100%, 100% 100% !important;
+          animation: sirPrism 7.2s ease-in-out infinite !important;
+        }
+
+        .hit-sir::after {
+          opacity: .30 !important;
+          background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(255,255,255,.06),
+            rgba(34,211,238,.18),
+            rgba(244,114,182,.16),
+            rgba(255,255,255,.22),
+            transparent
+          ) !important;
+          animation: sirGlint 6.4s ease-in-out infinite !important;
+        }
+
+        /* Keep content and artwork crisp above the effects. */
+        .hit-layout,
+        .hit-content,
+        .hit-card-art-wrap,
+        .showcase-hit-card > * {
+          position: relative;
+          z-index: 3;
+        }
+
+        .hit-card-art {
+          filter: drop-shadow(0 12px 18px rgba(0,0,0,.52)) !important;
+        }
+
+        .hit-break {
+          opacity: .68 !important;
+          letter-spacing: 1.4px !important;
+        }
+
+        .break-number {
+          background: rgba(255,255,255,.045) !important;
+          border: 1px solid rgba(255,255,255,.20) !important;
+          box-shadow: none !important;
+          padding: 6px 14px !important;
+        }
+
+        .hit-card h3,
+        .showcase-hit-card h3 {
+          text-shadow: 0 3px 16px rgba(0,0,0,.52) !important;
+        }
+
+        .hit-badge {
+          padding: 7px 18px !important;
+          border: 1px solid rgba(var(--tier-accent), .46) !important;
+          background: rgba(var(--tier-accent), .12) !important;
+          color: rgb(var(--tier-accent)) !important;
+          box-shadow: inset 0 1px 0 rgba(255,255,255,.06) !important;
+        }
+
+        .cosmic-stars,
+        .planet-field,
+        .rocket-field {
+          display: none !important;
+        }
+
+        @keyframes premiumAmbient {
+          0%, 100% { opacity: .62; transform: translate3d(0,0,0); }
+          50% { opacity: 1; transform: translate3d(-1%,0,0); }
+        }
+
+        @keyframes premiumSweep {
+          0%, 62% { left: -42%; opacity: 0; }
+          68% { opacity: .26; }
+          82% { left: 118%; opacity: .18; }
+          88%, 100% { left: 118%; opacity: 0; }
+        }
+
+        @keyframes exEdge {
+          0%,100% { border-color: rgba(59,130,246,.28); }
+          50% { border-color: rgba(96,165,250,.58); }
+        }
+
+        @keyframes srBreath {
+          0%,100% { opacity: .52; transform: scale(1); }
+          50% { opacity: .92; transform: scale(1.018); }
+        }
+
+        @keyframes irFoil {
+          0%,18% { left: -42%; opacity: 0; }
+          28% { opacity: .32; }
+          62% { left: 118%; opacity: .28; }
+          72%,100% { left: 118%; opacity: 0; }
+        }
+
+        @keyframes marLightning {
+          0%, 69%, 73%, 77%, 100% { background-position: -120% 0, 0 0; opacity: .10; }
+          70% { background-position: 12% 0, 0 0; opacity: .95; }
+          71% { background-position: 24% 0, 0 0; opacity: .22; }
+          72% { background-position: 36% 0, 0 0; opacity: .78; }
+          74% { background-position: 55% 0, 0 0; opacity: .14; }
+          75% { background-position: 70% 0, 0 0; opacity: .62; }
+          76% { background-position: 84% 0, 0 0; opacity: .16; }
+        }
+
+        @keyframes marCharge {
+          0%,66%,80%,100% { opacity: .04; }
+          71%,75% { opacity: .24; }
+        }
+
+        @keyframes goldSpecular {
+          0%,24% { left: -42%; opacity: 0; }
+          35% { opacity: .36; }
+          68% { left: 118%; opacity: .28; }
+          78%,100% { left: 118%; opacity: 0; }
+        }
+
+        @keyframes sirPrism {
+          0%,100% { background-position: 0% 50%, 0 0; opacity: .48; }
+          50% { background-position: 100% 50%, 0 0; opacity: .82; }
+        }
+
+        @keyframes sirGlint {
+          0%,30% { left: -42%; opacity: 0; }
+          42% { opacity: .30; }
+          72% { left: 118%; opacity: .24; }
+          82%,100% { left: 118%; opacity: 0; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .hit-card,
+          .showcase-hit-card,
+          .hit-card::before,
+          .hit-card::after,
+          .showcase-hit-card::before,
+          .showcase-hit-card::after {
+            animation: none !important;
+          }
+        }
+
+
+        /* ===== Motion pass v2: effects are deliberately visible, but still contained ===== */
+
+        .hit-card,
+        .showcase-hit-card {
+          isolation: isolate;
+          overflow: hidden !important;
+        }
+
+        /* EX — a cool-blue charge travels around the card edge. */
+        .hit-ex {
+          animation: exCharge 3.6s ease-in-out infinite !important;
+        }
+
+        .hit-ex::before {
+          background:
+            radial-gradient(circle at 12% 50%, rgba(96,165,250,.20), transparent 26%),
+            linear-gradient(90deg, transparent, rgba(59,130,246,.08), transparent) !important;
+          animation: exEnergy 3.6s ease-in-out infinite !important;
+        }
+
+        /* SR — a restrained violet energy bloom. */
+        .hit-sr::before {
+          background:
+            radial-gradient(circle at 50% 120%, rgba(168,85,247,.28), transparent 42%),
+            radial-gradient(circle at 82% 28%, rgba(192,132,252,.12), transparent 24%) !important;
+          animation: srEnergy 3.8s ease-in-out infinite !important;
+        }
+
+        /* IR — obvious foil sweep, but only for a moment each cycle. */
+        .hit-ir::after {
+          left: -35% !important;
+          width: 22% !important;
+          opacity: 0 !important;
+          background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(251,146,60,.10),
+            rgba(244,114,182,.38),
+            rgba(255,255,255,.48),
+            rgba(96,165,250,.14),
+            transparent
+          ) !important;
+          filter: blur(1px);
+          animation: irFoilVisible 4.8s ease-in-out infinite !important;
+        }
+
+        /* MAR — actual lightning bolt flash rather than a generic light sweep. */
+        .hit-mar::before {
+          top: -18% !important;
+          left: 58% !important;
+          right: auto !important;
+          bottom: auto !important;
+          width: 18% !important;
+          height: 145% !important;
+          opacity: 0 !important;
+          background: linear-gradient(
+            180deg,
+            rgba(255,255,255,.98),
+            rgba(125,211,252,.96) 38%,
+            rgba(34,211,238,.82) 70%,
+            rgba(255,255,255,.94)
+          ) !important;
+          clip-path: polygon(
+            48% 0,
+            70% 0,
+            57% 30%,
+            78% 30%,
+            43% 60%,
+            62% 60%,
+            20% 100%,
+            35% 66%,
+            14% 66%,
+            43% 36%,
+            27% 36%
+          );
+          filter:
+            drop-shadow(0 0 4px rgba(255,255,255,.95))
+            drop-shadow(0 0 12px rgba(34,211,238,.95))
+            drop-shadow(0 0 22px rgba(14,165,233,.62));
+          transform: rotate(9deg) scale(.82);
+          animation: marBolt 4.6s steps(1,end) infinite !important;
+        }
+
+        .hit-mar::after {
+          inset: 0 !important;
+          width: auto !important;
+          height: auto !important;
+          left: 0 !important;
+          opacity: 0 !important;
+          transform: none !important;
+          background:
+            radial-gradient(circle at 68% 48%, rgba(224,242,254,.30), transparent 16%),
+            linear-gradient(90deg, transparent, rgba(34,211,238,.10), transparent) !important;
+          animation: marFlash 4.6s steps(1,end) infinite !important;
+        }
+
+        /* Gold — polished black metal with a strong but infrequent gold reflection. */
+        .hit-gold::after {
+          left: -32% !important;
+          width: 18% !important;
+          opacity: 0 !important;
+          background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(212,175,55,.16),
+            rgba(255,246,196,.70),
+            rgba(250,204,21,.22),
+            transparent
+          ) !important;
+          animation: goldGlintVisible 5s ease-in-out infinite !important;
+        }
+
+        /* SIR — moving holographic film. The card stays dark underneath. */
+        .hit-sir::before {
+          inset: -55% !important;
+          width: auto !important;
+          height: auto !important;
+          left: -55% !important;
+          opacity: .34 !important;
+          background: conic-gradient(
+            from 0deg,
+            transparent 0deg,
+            rgba(34,211,238,.28) 52deg,
+            rgba(167,139,250,.32) 108deg,
+            rgba(244,114,182,.26) 162deg,
+            rgba(250,204,21,.18) 214deg,
+            rgba(34,211,238,.24) 278deg,
+            transparent 335deg
+          ) !important;
+          filter: blur(22px);
+          transform: rotate(0deg);
+          animation: sirHoloRotate 8s linear infinite !important;
+        }
+
+        .hit-sir::after {
+          left: -30% !important;
+          width: 16% !important;
+          opacity: 0 !important;
+          background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(255,255,255,.10),
+            rgba(255,255,255,.55),
+            rgba(34,211,238,.18),
+            rgba(244,114,182,.18),
+            transparent
+          ) !important;
+          animation: sirHoloSweep 4.9s ease-in-out infinite !important;
+        }
+
+        @keyframes exCharge {
+          0%,100% {
+            border-color: rgba(59,130,246,.28);
+            box-shadow: 0 14px 34px rgba(0,0,0,.28), inset 0 0 0 1px rgba(59,130,246,.02);
+          }
+          45%,55% {
+            border-color: rgba(96,165,250,.72);
+            box-shadow: 0 14px 34px rgba(0,0,0,.28), 0 0 16px rgba(59,130,246,.18), inset 0 0 20px rgba(59,130,246,.06);
+          }
+        }
+
+        @keyframes exEnergy {
+          0%,100% { transform: translateX(-18%); opacity: .35; }
+          50% { transform: translateX(18%); opacity: .9; }
+        }
+
+        @keyframes srEnergy {
+          0%,100% { opacity: .30; transform: scale(.96); }
+          50% { opacity: .95; transform: scale(1.08); }
+        }
+
+        @keyframes irFoilVisible {
+          0%,22% { left: -35%; opacity: 0; }
+          30% { opacity: .60; }
+          58% { left: 118%; opacity: .48; }
+          66%,100% { left: 118%; opacity: 0; }
+        }
+
+        @keyframes marBolt {
+          0%,68%,72%,76%,100% { opacity: 0; transform: rotate(9deg) scale(.82); }
+          69% { opacity: 1; transform: rotate(9deg) scale(1); }
+          70% { opacity: .12; }
+          71% { opacity: .88; transform: rotate(7deg) scale(.96); }
+          73% { opacity: .18; }
+          74% { opacity: .72; transform: rotate(10deg) scale(1.02); }
+          75% { opacity: .08; }
+        }
+
+        @keyframes marFlash {
+          0%,68%,72%,76%,100% { opacity: 0; }
+          69%,71%,74% { opacity: 1; }
+          70%,73%,75% { opacity: .10; }
+        }
+
+        @keyframes goldGlintVisible {
+          0%,28% { left: -32%; opacity: 0; }
+          38% { opacity: .72; }
+          66% { left: 116%; opacity: .48; }
+          74%,100% { left: 116%; opacity: 0; }
+        }
+
+        @keyframes sirHoloRotate {
+          from { transform: rotate(0deg) scale(1); }
+          50% { transform: rotate(180deg) scale(1.08); }
+          to { transform: rotate(360deg) scale(1); }
+        }
+
+        @keyframes sirHoloSweep {
+          0%,18% { left: -30%; opacity: 0; }
+          28% { opacity: .58; }
+          60% { left: 118%; opacity: .40; }
+          70%,100% { left: 118%; opacity: 0; }
+        }
+
+        /* FIX: animation layers were sitting behind the card background. */
+        .hit-card::before,
+        .showcase-hit-card::before {
+          z-index: 0 !important;
+          pointer-events: none !important;
+        }
+
+        .hit-card::after,
+        .showcase-hit-card::after {
+          z-index: 1 !important;
+          pointer-events: none !important;
+        }
+
+        .hit-layout,
+        .hit-content,
+        .hit-card-art-wrap,
+        .showcase-hit-card > * {
+          position: relative;
+          z-index: 3 !important;
+        }
+
+
+        /* =====================================================
+           RARITY FX — real DOM layers (not pseudo-elements)
+           ===================================================== */
+
+        .hit-card {
+          isolation: isolate;
+          overflow: hidden !important;
+        }
+
+        .rarity-fx {
+          position: absolute;
+          inset: 0;
+          z-index: 1;
+          overflow: hidden;
+          border-radius: inherit;
+          pointer-events: none;
+        }
+
+        .rarity-fx > span {
+          position: absolute;
+          display: block;
+          pointer-events: none;
+        }
+
+        .hit-card > .hit-layout {
+          position: relative;
+          z-index: 5 !important;
+        }
+
+        /* Disable the old pseudo-element animation layers on actual hit cards.
+           The new DOM layers below are now the sole animation system. */
+        .hit-card::before,
+        .hit-card::after {
+          display: none !important;
+          animation: none !important;
+        }
+
+        /* EX — electric blue energy moving across a dark card */
+        .hit-ex .fx-ambient {
+          inset: 0;
+          background:
+            radial-gradient(circle at 10% 50%, rgba(59,130,246,.30), transparent 25%),
+            radial-gradient(circle at 90% 50%, rgba(96,165,250,.14), transparent 22%);
+          animation: fxExAmbient 3.2s ease-in-out infinite;
+        }
+
+        .hit-ex .fx-primary {
+          top: 0;
+          bottom: 0;
+          left: -22%;
+          width: 20%;
+          transform: skewX(-18deg);
+          background: linear-gradient(90deg, transparent, rgba(96,165,250,.38), transparent);
+          filter: blur(8px);
+          animation: fxTravel 3.2s ease-in-out infinite;
+        }
+
+        /* SR — violet energy breathing from underneath */
+        .hit-sr .fx-ambient {
+          left: 18%;
+          right: 18%;
+          bottom: -80%;
+          height: 150%;
+          border-radius: 50%;
+          background: radial-gradient(circle, rgba(168,85,247,.38), rgba(126,34,206,.12) 42%, transparent 68%);
+          filter: blur(12px);
+          animation: fxSrPulse 3.4s ease-in-out infinite;
+        }
+
+        .hit-sr .fx-secondary {
+          inset: 0;
+          background: radial-gradient(circle at 78% 28%, rgba(216,180,254,.12), transparent 20%);
+          animation: fxSrDrift 5s ease-in-out infinite;
+        }
+
+        /* IR — iridescent foil reflection */
+        .hit-ir .fx-primary {
+          top: -20%;
+          bottom: -20%;
+          left: -28%;
+          width: 24%;
+          transform: rotate(12deg);
+          background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(251,146,60,.16),
+            rgba(244,114,182,.52),
+            rgba(255,255,255,.72),
+            rgba(96,165,250,.22),
+            transparent
+          );
+          filter: blur(2px);
+          animation: fxIrFoil 4.3s ease-in-out infinite;
+        }
+
+        .hit-ir .fx-ambient {
+          inset: 0;
+          background: radial-gradient(circle at 75% 50%, rgba(244,114,182,.12), transparent 30%);
+        }
+
+        /* MAR — unmistakable lightning bolt + storm flash */
+        .hit-mar .fx-ambient {
+          inset: 0;
+          opacity: 0;
+          background:
+            radial-gradient(circle at 70% 48%, rgba(224,242,254,.42), transparent 18%),
+            radial-gradient(circle at 65% 48%, rgba(34,211,238,.20), transparent 35%);
+          animation: fxMarFlash 4.2s steps(1,end) infinite;
+        }
+
+        .hit-mar .fx-primary {
+          top: -16%;
+          left: 65%;
+          width: 14%;
+          height: 140%;
+          opacity: 0;
+          background: linear-gradient(180deg, #fff, #bae6fd 34%, #22d3ee 72%, #fff);
+          clip-path: polygon(
+            46% 0, 68% 0, 56% 28%, 78% 28%,
+            45% 57%, 64% 57%, 19% 100%,
+            35% 65%, 14% 65%, 42% 35%, 27% 35%
+          );
+          filter:
+            drop-shadow(0 0 4px #fff)
+            drop-shadow(0 0 11px rgba(34,211,238,1))
+            drop-shadow(0 0 25px rgba(14,165,233,.9));
+          animation: fxMarBolt 4.2s steps(1,end) infinite;
+        }
+
+        .hit-mar .fx-secondary {
+          top: 18%;
+          left: 48%;
+          width: 9%;
+          height: 78%;
+          opacity: 0;
+          transform: rotate(-17deg);
+          background: linear-gradient(180deg, #fff, #67e8f9, #fff);
+          clip-path: polygon(45% 0, 68% 0, 55% 39%, 78% 39%, 23% 100%, 39% 55%, 18% 55%);
+          filter: drop-shadow(0 0 9px rgba(34,211,238,.95));
+          animation: fxMarBoltSmall 4.2s steps(1,end) infinite;
+        }
+
+        /* GOLD — polished black metal with a gold specular reflection */
+        .hit-gold .fx-ambient {
+          inset: 0;
+          background:
+            radial-gradient(circle at 18% 20%, rgba(212,175,55,.12), transparent 25%),
+            radial-gradient(circle at 82% 70%, rgba(250,204,21,.08), transparent 26%);
+        }
+
+        .hit-gold .fx-primary {
+          top: -20%;
+          bottom: -20%;
+          left: -28%;
+          width: 19%;
+          transform: rotate(12deg);
+          background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(212,175,55,.20),
+            rgba(255,248,203,.88),
+            rgba(250,204,21,.34),
+            transparent
+          );
+          filter: blur(1px);
+          animation: fxGoldSweep 4.6s ease-in-out infinite;
+        }
+
+        /* SIR — rotating holographic film plus sharp foil glint */
+        .hit-sir .fx-ambient {
+          inset: -80%;
+          opacity: .52;
+          background: conic-gradient(
+            from 0deg,
+            transparent 0deg,
+            rgba(34,211,238,.34) 50deg,
+            rgba(167,139,250,.42) 105deg,
+            rgba(244,114,182,.34) 165deg,
+            rgba(250,204,21,.22) 220deg,
+            rgba(34,211,238,.32) 285deg,
+            transparent 340deg
+          );
+          filter: blur(26px);
+          animation: fxSirRotate 7s linear infinite;
+        }
+
+        .hit-sir .fx-primary {
+          top: -20%;
+          bottom: -20%;
+          left: -28%;
+          width: 18%;
+          transform: rotate(12deg);
+          background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(255,255,255,.08),
+            rgba(255,255,255,.72),
+            rgba(34,211,238,.28),
+            rgba(244,114,182,.24),
+            transparent
+          );
+          animation: fxSirSweep 4.5s ease-in-out infinite;
+        }
+
+        .hit-sir .fx-secondary {
+          inset: 0;
+          background:
+            linear-gradient(120deg,
+              transparent 15%,
+              rgba(34,211,238,.08) 35%,
+              rgba(167,139,250,.10) 48%,
+              rgba(244,114,182,.08) 62%,
+              transparent 80%);
+          background-size: 220% 100%;
+          animation: fxSirFilm 5.5s ease-in-out infinite;
+        }
+
+        @keyframes fxTravel {
+          0%,18% { left: -22%; opacity: 0; }
+          30% { opacity: 1; }
+          65% { left: 112%; opacity: .7; }
+          76%,100% { left: 112%; opacity: 0; }
+        }
+
+        @keyframes fxExAmbient {
+          0%,100% { opacity: .35; transform: translateX(-2%); }
+          50% { opacity: .9; transform: translateX(2%); }
+        }
+
+        @keyframes fxSrPulse {
+          0%,100% { opacity: .25; transform: scale(.88); }
+          50% { opacity: .9; transform: scale(1.12); }
+        }
+
+        @keyframes fxSrDrift {
+          0%,100% { transform: translateX(-4%); opacity: .35; }
+          50% { transform: translateX(4%); opacity: .85; }
+        }
+
+        @keyframes fxIrFoil {
+          0%,18% { left: -28%; opacity: 0; }
+          28% { opacity: .85; }
+          62% { left: 115%; opacity: .58; }
+          72%,100% { left: 115%; opacity: 0; }
+        }
+
+        @keyframes fxMarBolt {
+          0%,61%,65%,69%,100% { opacity: 0; transform: rotate(8deg) scale(.84); }
+          62% { opacity: 1; transform: rotate(8deg) scale(1); }
+          63% { opacity: .10; }
+          64% { opacity: .94; transform: rotate(5deg) scale(.97); }
+          66% { opacity: .12; }
+          67% { opacity: .78; transform: rotate(10deg) scale(1.03); }
+          68% { opacity: .06; }
+        }
+
+        @keyframes fxMarBoltSmall {
+          0%,63%,67%,100% { opacity: 0; }
+          64% { opacity: .82; }
+          65% { opacity: .08; }
+          66% { opacity: .62; }
+        }
+
+        @keyframes fxMarFlash {
+          0%,61%,65%,69%,100% { opacity: 0; }
+          62%,64%,67% { opacity: 1; }
+          63%,66%,68% { opacity: .08; }
+        }
+
+        @keyframes fxGoldSweep {
+          0%,20% { left: -28%; opacity: 0; }
+          30% { opacity: .9; }
+          62% { left: 114%; opacity: .65; }
+          72%,100% { left: 114%; opacity: 0; }
+        }
+
+        @keyframes fxSirRotate {
+          from { transform: rotate(0deg) scale(1); }
+          50% { transform: rotate(180deg) scale(1.08); }
+          to { transform: rotate(360deg) scale(1); }
+        }
+
+        @keyframes fxSirSweep {
+          0%,16% { left: -28%; opacity: 0; }
+          28% { opacity: .85; }
+          62% { left: 114%; opacity: .62; }
+          72%,100% { left: 114%; opacity: 0; }
+        }
+
+        @keyframes fxSirFilm {
+          0%,100% { background-position: 0% 50%; opacity: .45; }
+          50% { background-position: 100% 50%; opacity: .9; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .rarity-fx > span {
+            animation: none !important;
+          }
+        }
+
+
+        /* =====================================================
+           PREMIUM FX V2 — stronger high-tier spectacle
+           ===================================================== */
+
+        /* SR — faint drifting energy particles on top of the existing bloom */
+        .hit-sr .fx-detail {
+          inset: 0;
+          opacity: .45;
+          background-image:
+            radial-gradient(circle, rgba(216,180,254,.72) 0 1px, transparent 1.6px),
+            radial-gradient(circle, rgba(168,85,247,.55) 0 1.2px, transparent 1.8px);
+          background-size: 42px 42px, 67px 67px;
+          background-position: 8px 12px, 31px 4px;
+          animation: fxSrParticles 7s linear infinite;
+        }
+
+        /* IR — add a slow full-surface iridescent film behind the foil sweep */
+        .hit-ir .fx-secondary {
+          inset: -20%;
+          opacity: .28;
+          background:
+            linear-gradient(
+              115deg,
+              rgba(251,146,60,.14),
+              rgba(244,114,182,.18),
+              rgba(167,139,250,.13),
+              rgba(34,211,238,.12),
+              rgba(251,146,60,.12)
+            );
+          background-size: 220% 220%;
+          filter: blur(18px);
+          animation: fxIrFilm 7s ease-in-out infinite;
+        }
+
+        /* MAR — storm field, extra branching bolt and travelling electric border */
+        .hit-mar {
+          animation: fxMarBorder 3.4s ease-in-out infinite !important;
+        }
+
+        .hit-mar .fx-ambient {
+          background:
+            radial-gradient(circle at 70% 48%, rgba(224,242,254,.48), transparent 17%),
+            radial-gradient(circle at 65% 48%, rgba(34,211,238,.22), transparent 34%),
+            linear-gradient(115deg, transparent 0 42%, rgba(34,211,238,.06) 50%, transparent 58%);
+          background-size: 100% 100%, 100% 100%, 180% 100%;
+          animation: fxMarStorm 4.2s steps(1,end) infinite;
+        }
+
+        .hit-mar .fx-detail {
+          top: -10%;
+          left: 34%;
+          width: 8%;
+          height: 115%;
+          opacity: 0;
+          transform: rotate(18deg);
+          background: linear-gradient(180deg, #fff, #67e8f9 50%, #fff);
+          clip-path: polygon(
+            43% 0, 66% 0, 54% 25%, 77% 25%,
+            45% 51%, 66% 51%, 18% 100%,
+            36% 59%, 15% 59%, 41% 32%, 25% 32%
+          );
+          filter:
+            drop-shadow(0 0 4px rgba(255,255,255,1))
+            drop-shadow(0 0 10px rgba(34,211,238,.95));
+          animation: fxMarBranch 4.2s steps(1,end) infinite;
+        }
+
+        /* GOLD — animated metal surface, gold dust and a breathing edge */
+        .hit-gold {
+          animation: fxGoldBorder 4s ease-in-out infinite !important;
+        }
+
+        .hit-gold .fx-ambient {
+          inset: 0;
+          background:
+            radial-gradient(circle at 18% 20%, rgba(212,175,55,.16), transparent 24%),
+            radial-gradient(circle at 82% 70%, rgba(250,204,21,.11), transparent 25%),
+            linear-gradient(120deg, rgba(255,255,255,.015), rgba(212,175,55,.07), rgba(255,255,255,.01));
+          background-size: 100% 100%, 100% 100%, 210% 100%;
+          animation: fxGoldMetal 6s ease-in-out infinite;
+        }
+
+        .hit-gold .fx-detail {
+          inset: 0;
+          opacity: .68;
+          background-image:
+            radial-gradient(circle, rgba(255,235,140,.90) 0 1px, transparent 1.7px),
+            radial-gradient(circle, rgba(212,175,55,.72) 0 1.3px, transparent 2px),
+            radial-gradient(circle, rgba(255,248,203,.56) 0 .8px, transparent 1.5px);
+          background-size: 53px 53px, 79px 79px, 101px 101px;
+          background-position: 4px 11px, 33px 7px, 16px 48px;
+          animation: fxGoldDust 8s linear infinite;
+        }
+
+        /* SIR — showpiece: layered prism field, spectral rays, particles and animated edge */
+        .hit-sir {
+          animation: fxSirBorder 3.6s ease-in-out infinite !important;
+        }
+
+        .hit-sir .fx-ambient {
+          inset: -65%;
+          opacity: .68;
+          background: conic-gradient(
+            from 0deg,
+            transparent 0deg,
+            rgba(34,211,238,.40) 46deg,
+            rgba(99,102,241,.34) 86deg,
+            rgba(167,139,250,.46) 125deg,
+            rgba(244,114,182,.40) 168deg,
+            rgba(250,204,21,.26) 214deg,
+            rgba(52,211,153,.20) 254deg,
+            rgba(34,211,238,.38) 302deg,
+            transparent 344deg
+          );
+          filter: blur(24px);
+          animation: fxSirRotateV2 6.5s linear infinite;
+        }
+
+        .hit-sir .fx-secondary {
+          inset: 0;
+          opacity: .64;
+          background:
+            linear-gradient(
+              112deg,
+              transparent 8%,
+              rgba(34,211,238,.13) 28%,
+              transparent 39%,
+              rgba(167,139,250,.16) 51%,
+              transparent 62%,
+              rgba(244,114,182,.13) 76%,
+              transparent 91%
+            );
+          background-size: 240% 100%;
+          animation: fxSirRays 4.8s ease-in-out infinite;
+        }
+
+        .hit-sir .fx-detail {
+          inset: 0;
+          opacity: .62;
+          background-image:
+            radial-gradient(circle, rgba(255,255,255,.88) 0 .9px, transparent 1.7px),
+            radial-gradient(circle, rgba(103,232,249,.72) 0 1.1px, transparent 1.8px),
+            radial-gradient(circle, rgba(244,114,182,.62) 0 .9px, transparent 1.6px);
+          background-size: 49px 49px, 73px 73px, 97px 97px;
+          background-position: 7px 13px, 38px 2px, 19px 39px;
+          animation: fxSirParticles 7s linear infinite;
+        }
+
+        @keyframes fxSrParticles {
+          from { background-position: 8px 12px, 31px 4px; }
+          to { background-position: 8px -72px, 31px -130px; }
+        }
+
+        @keyframes fxIrFilm {
+          0%,100% { background-position: 0% 50%; transform: scale(1); }
+          50% { background-position: 100% 50%; transform: scale(1.05); }
+        }
+
+        @keyframes fxMarBorder {
+          0%,58%,72%,100% {
+            border-color: rgba(34,211,238,.28);
+            box-shadow: 0 14px 34px rgba(0,0,0,.28);
+          }
+          62%,66%,69% {
+            border-color: rgba(186,230,253,.92);
+            box-shadow:
+              0 14px 34px rgba(0,0,0,.28),
+              0 0 14px rgba(34,211,238,.30),
+              inset 0 0 16px rgba(34,211,238,.08);
+          }
+        }
+
+        @keyframes fxMarStorm {
+          0%,60%,64%,68%,72%,100% {
+            opacity: .10;
+            background-position: 0 0, 0 0, -60% 0;
+          }
+          61%,65%,69% {
+            opacity: 1;
+            background-position: 0 0, 0 0, 80% 0;
+          }
+          62%,66%,70% { opacity: .18; }
+        }
+
+        @keyframes fxMarBranch {
+          0%,64%,68%,100% { opacity: 0; }
+          65% { opacity: .92; transform: rotate(18deg) scale(1); }
+          66% { opacity: .08; }
+          67% { opacity: .72; transform: rotate(15deg) scale(.96); }
+        }
+
+        @keyframes fxGoldBorder {
+          0%,100% {
+            border-color: rgba(212,175,55,.34);
+            box-shadow: 0 14px 34px rgba(0,0,0,.28);
+          }
+          50% {
+            border-color: rgba(255,224,102,.78);
+            box-shadow:
+              0 14px 34px rgba(0,0,0,.28),
+              0 0 14px rgba(212,175,55,.20),
+              inset 0 0 14px rgba(212,175,55,.05);
+          }
+        }
+
+        @keyframes fxGoldMetal {
+          0%,100% { background-position: 0 0, 0 0, 0% 50%; }
+          50% { background-position: 0 0, 0 0, 100% 50%; }
+        }
+
+        @keyframes fxGoldDust {
+          from { background-position: 4px 11px, 33px 7px, 16px 48px; }
+          to { background-position: 4px -95px, 33px -151px, 16px -154px; }
+        }
+
+        @keyframes fxSirBorder {
+          0%,100% {
+            border-color: rgba(167,139,250,.38);
+            box-shadow: 0 14px 34px rgba(0,0,0,.28);
+          }
+          33% {
+            border-color: rgba(34,211,238,.72);
+            box-shadow: 0 14px 34px rgba(0,0,0,.28), 0 0 15px rgba(34,211,238,.17);
+          }
+          66% {
+            border-color: rgba(244,114,182,.68);
+            box-shadow: 0 14px 34px rgba(0,0,0,.28), 0 0 15px rgba(244,114,182,.15);
+          }
+        }
+
+        @keyframes fxSirRotateV2 {
+          from { transform: rotate(0deg) scale(1); }
+          50% { transform: rotate(180deg) scale(1.12); }
+          to { transform: rotate(360deg) scale(1); }
+        }
+
+        @keyframes fxSirRays {
+          0%,100% { background-position: 0% 50%; opacity: .38; }
+          50% { background-position: 100% 50%; opacity: .78; }
+        }
+
+        @keyframes fxSirParticles {
+          from { background-position: 7px 13px, 38px 2px, 19px 39px; }
+          to { background-position: 7px -85px, 38px -144px, 19px -155px; }
+        }
+
+
+        /* =====================================================
+           PREMIUM FX V3 — clear rarity hierarchy
+           MAR = constant electrical storm
+           GOLD = molten black/gold metal
+           SIR = dimensional prismatic glass
+           ===================================================== */
+
+        /* ---------- MAR: CONSTANT ELECTRICAL STORM ---------- */
+
+        .hit-mar {
+          border-color: rgba(103,232,249,.48) !important;
+          animation: marChargedEdge 2.1s ease-in-out infinite !important;
+        }
+
+        .hit-mar .fx-ambient {
+          inset: 0;
+          opacity: .72 !important;
+          background:
+            radial-gradient(circle at 18% 18%, rgba(34,211,238,.13), transparent 22%),
+            radial-gradient(circle at 82% 78%, rgba(59,130,246,.12), transparent 25%),
+            linear-gradient(115deg, transparent 0 40%, rgba(34,211,238,.045) 50%, transparent 60%);
+          background-size: 100% 100%, 100% 100%, 190% 100%;
+          animation: marStormDrift 4s linear infinite !important;
+        }
+
+        /* long branching arc running diagonally behind content */
+        .hit-mar .fx-primary {
+          top: -12% !important;
+          left: 6% !important;
+          width: 92% !important;
+          height: 122% !important;
+          opacity: .78 !important;
+          transform: none !important;
+          background: none !important;
+          filter: none !important;
+          animation: marArcFlickerA 1.35s steps(1,end) infinite !important;
+        }
+
+        .hit-mar .fx-primary::before,
+        .hit-mar .fx-primary::after,
+        .hit-mar .fx-secondary::before,
+        .hit-mar .fx-secondary::after,
+        .hit-mar .fx-extra::before,
+        .hit-mar .fx-extra::after {
+          content: "";
+          position: absolute;
+          pointer-events: none;
+          background: linear-gradient(90deg, transparent, #e0f2fe 12%, #67e8f9 50%, #ffffff 82%, transparent);
+          height: 2px;
+          border-radius: 999px;
+          filter:
+            drop-shadow(0 0 2px rgba(255,255,255,.95))
+            drop-shadow(0 0 5px rgba(34,211,238,.95))
+            drop-shadow(0 0 10px rgba(14,165,233,.65));
+        }
+
+        .hit-mar .fx-primary::before {
+          width: 64%;
+          top: 18%;
+          left: 2%;
+          transform: rotate(8deg);
+          clip-path: polygon(0 40%, 14% 0, 25% 65%, 39% 18%, 52% 82%, 67% 24%, 82% 72%, 100% 30%, 100% 70%, 83% 100%, 67% 48%, 52% 100%, 39% 42%, 25% 90%, 14% 30%, 0 65%);
+        }
+
+        .hit-mar .fx-primary::after {
+          width: 54%;
+          right: 1%;
+          bottom: 19%;
+          transform: rotate(-10deg);
+        }
+
+        .hit-mar .fx-secondary {
+          inset: 0 !important;
+          width: auto !important;
+          height: auto !important;
+          left: 0 !important;
+          opacity: .74 !important;
+          transform: none !important;
+          background: none !important;
+          animation: marArcFlickerB 1.7s steps(1,end) infinite !important;
+        }
+
+        .hit-mar .fx-secondary::before {
+          width: 48%;
+          top: 48%;
+          left: -3%;
+          transform: rotate(-7deg);
+        }
+
+        .hit-mar .fx-secondary::after {
+          width: 42%;
+          top: 38%;
+          right: -3%;
+          transform: rotate(12deg);
+        }
+
+        /* electric perimeter lines */
+        .hit-mar .fx-detail {
+          inset: 4px !important;
+          opacity: .78 !important;
+          border-radius: inherit;
+          border-top: 1px solid rgba(186,230,253,.78);
+          border-right: 1px solid rgba(34,211,238,.48);
+          border-bottom: 1px solid rgba(96,165,250,.58);
+          border-left: 1px solid rgba(103,232,249,.42);
+          box-shadow:
+            inset 0 0 10px rgba(34,211,238,.08),
+            0 0 8px rgba(34,211,238,.12);
+          background: none !important;
+          animation: marPerimeter 1.8s ease-in-out infinite !important;
+        }
+
+        .hit-mar .fx-extra {
+          inset: 0;
+          opacity: .8;
+          animation: marArcFlickerC 1.1s steps(1,end) infinite;
+        }
+
+        .hit-mar .fx-extra::before {
+          width: 36%;
+          top: 8%;
+          right: 8%;
+          transform: rotate(-4deg);
+        }
+
+        .hit-mar .fx-extra::after {
+          width: 31%;
+          bottom: 8%;
+          left: 12%;
+          transform: rotate(5deg);
+        }
+
+        .hit-mar .fx-flare {
+          inset: 0;
+          opacity: .12;
+          background: radial-gradient(circle at 60% 50%, rgba(224,242,254,.42), transparent 32%);
+          animation: marChargeGlow 2.2s ease-in-out infinite;
+        }
+
+        /* ---------- GOLD: MOLTEN BLACK METAL ---------- */
+
+        .hit-gold {
+          border-color: rgba(212,175,55,.55) !important;
+          background:
+            radial-gradient(circle at 20% 15%, rgba(212,175,55,.07), transparent 30%),
+            linear-gradient(135deg, #060606, #15130b 52%, #070707) !important;
+          animation: goldLivingEdge 3.2s ease-in-out infinite !important;
+        }
+
+        /* slow molten veins */
+        .hit-gold .fx-ambient {
+          inset: -12% !important;
+          opacity: .62 !important;
+          background:
+            repeating-linear-gradient(
+              118deg,
+              transparent 0 9%,
+              rgba(212,175,55,.03) 10%,
+              rgba(255,215,96,.24) 10.7%,
+              rgba(212,175,55,.05) 11.4%,
+              transparent 12.3% 22%
+            );
+          background-size: 180% 180%;
+          filter: blur(.3px);
+          animation: goldVeins 7s ease-in-out infinite !important;
+        }
+
+        .hit-gold .fx-primary {
+          top: -22% !important;
+          bottom: -22% !important;
+          left: -26% !important;
+          width: 17% !important;
+          transform: rotate(12deg) !important;
+          opacity: 0;
+          background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(212,175,55,.16),
+            rgba(255,248,203,.96),
+            rgba(250,204,21,.38),
+            transparent
+          ) !important;
+          filter: blur(.4px);
+          animation: goldLuxurySweep 4.7s ease-in-out infinite !important;
+        }
+
+        .hit-gold .fx-secondary {
+          inset: 0 !important;
+          opacity: .74 !important;
+          background-image:
+            radial-gradient(circle, rgba(255,238,155,.92) 0 1px, transparent 1.8px),
+            radial-gradient(circle, rgba(212,175,55,.68) 0 1.2px, transparent 2px),
+            radial-gradient(circle, rgba(255,248,203,.46) 0 .8px, transparent 1.5px) !important;
+          background-size: 47px 47px, 73px 73px, 101px 101px !important;
+          background-position: 5px 13px, 31px 4px, 18px 44px !important;
+          animation: goldSparks 6.8s linear infinite !important;
+        }
+
+        .hit-gold .fx-detail {
+          inset: 3px !important;
+          border-radius: inherit;
+          border: 1px solid rgba(255,222,112,.34);
+          background: none !important;
+          box-shadow:
+            inset 0 0 16px rgba(212,175,55,.07),
+            0 0 9px rgba(212,175,55,.08);
+          animation: goldInnerEdge 2.8s ease-in-out infinite !important;
+        }
+
+        /* molten glow pockets moving beneath the surface */
+        .hit-gold .fx-extra {
+          inset: 0;
+          opacity: .48;
+          background:
+            radial-gradient(ellipse at 22% 72%, rgba(250,204,21,.18), transparent 16%),
+            radial-gradient(ellipse at 62% 28%, rgba(212,175,55,.16), transparent 18%),
+            radial-gradient(ellipse at 84% 66%, rgba(255,230,128,.13), transparent 15%);
+          filter: blur(8px);
+          animation: goldMoltenGlow 5.2s ease-in-out infinite;
+        }
+
+        .hit-gold .fx-flare {
+          inset: 0;
+          opacity: 0;
+          background: radial-gradient(circle at 50% 50%, rgba(255,238,160,.20), transparent 42%);
+          animation: goldPowerPulse 6s ease-in-out infinite;
+        }
+
+        /* ---------- SIR: DIMENSIONAL PRISM / HOLOGRAPHIC GLASS ---------- */
+
+        .hit-sir {
+          border-color: rgba(196,181,253,.58) !important;
+          background:
+            radial-gradient(circle at 18% 15%, rgba(34,211,238,.055), transparent 28%),
+            radial-gradient(circle at 85% 80%, rgba(244,114,182,.055), transparent 30%),
+            linear-gradient(135deg, #060913, #101326 52%, #070912) !important;
+          animation: sirLivingBorder 3.8s linear infinite !important;
+        }
+
+        /* deep rotating prism */
+        .hit-sir .fx-ambient {
+          inset: -68% !important;
+          opacity: .72 !important;
+          background: conic-gradient(
+            from 0deg,
+            transparent 0deg,
+            rgba(34,211,238,.42) 44deg,
+            rgba(99,102,241,.38) 88deg,
+            rgba(167,139,250,.50) 128deg,
+            rgba(244,114,182,.44) 170deg,
+            rgba(250,204,21,.28) 214deg,
+            rgba(52,211,153,.24) 260deg,
+            rgba(34,211,238,.40) 304deg,
+            transparent 346deg
+          ) !important;
+          filter: blur(22px);
+          animation: sirDimensionRotate 6s linear infinite !important;
+        }
+
+        /* sharp spectral flare */
+        .hit-sir .fx-primary {
+          top: -25% !important;
+          bottom: -25% !important;
+          left: -28% !important;
+          width: 19% !important;
+          opacity: 0;
+          transform: rotate(12deg) !important;
+          background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(255,255,255,.10),
+            rgba(255,255,255,.92),
+            rgba(103,232,249,.34),
+            rgba(196,181,253,.36),
+            rgba(244,114,182,.30),
+            transparent
+          ) !important;
+          filter: blur(.3px);
+          animation: sirSpectralFlare 4.2s ease-in-out infinite !important;
+        }
+
+        /* moving refracted glass rays */
+        .hit-sir .fx-secondary {
+          inset: 0 !important;
+          opacity: .72 !important;
+          background:
+            linear-gradient(
+              112deg,
+              transparent 4%,
+              rgba(34,211,238,.13) 19%,
+              transparent 31%,
+              rgba(167,139,250,.17) 43%,
+              transparent 56%,
+              rgba(244,114,182,.15) 70%,
+              transparent 84%,
+              rgba(250,204,21,.08) 94%
+            ) !important;
+          background-size: 260% 100% !important;
+          animation: sirGlassRays 4.5s ease-in-out infinite !important;
+        }
+
+        /* prism dust */
+        .hit-sir .fx-detail {
+          inset: 0 !important;
+          opacity: .72 !important;
+          border: 0 !important;
+          box-shadow: none !important;
+          background-image:
+            radial-gradient(circle, rgba(255,255,255,.96) 0 .9px, transparent 1.8px),
+            radial-gradient(circle, rgba(103,232,249,.78) 0 1.1px, transparent 1.9px),
+            radial-gradient(circle, rgba(244,114,182,.70) 0 .9px, transparent 1.7px),
+            radial-gradient(circle, rgba(196,181,253,.72) 0 1px, transparent 1.8px) !important;
+          background-size: 43px 43px, 67px 67px, 89px 89px, 113px 113px !important;
+          background-position: 7px 12px, 31px 3px, 18px 41px, 51px 22px !important;
+          animation: sirPrismDust 6.5s linear infinite !important;
+        }
+
+        /* dimensional lens/refraction layer */
+        .hit-sir .fx-extra {
+          inset: -15%;
+          opacity: .46;
+          background:
+            radial-gradient(ellipse at 28% 50%, transparent 0 15%, rgba(34,211,238,.13) 22%, transparent 34%),
+            radial-gradient(ellipse at 68% 45%, transparent 0 13%, rgba(244,114,182,.13) 21%, transparent 35%),
+            radial-gradient(ellipse at 50% 65%, transparent 0 12%, rgba(167,139,250,.14) 20%, transparent 34%);
+          filter: blur(3px);
+          animation: sirLensDrift 5.5s ease-in-out infinite;
+        }
+
+        /* occasional jackpot-wide holographic bloom */
+        .hit-sir .fx-flare {
+          inset: 0;
+          opacity: 0;
+          background:
+            radial-gradient(circle at 50% 50%, rgba(255,255,255,.24), transparent 18%),
+            radial-gradient(circle at 50% 50%, rgba(103,232,249,.18), transparent 38%),
+            linear-gradient(90deg, transparent, rgba(196,181,253,.12), transparent);
+          animation: sirJackpotBloom 6.4s ease-in-out infinite;
+        }
+
+        @keyframes marChargedEdge {
+          0%,100% {
+            border-color: rgba(103,232,249,.42);
+            box-shadow: 0 14px 34px rgba(0,0,0,.28), 0 0 8px rgba(34,211,238,.08);
+          }
+          50% {
+            border-color: rgba(224,242,254,.74);
+            box-shadow: 0 14px 34px rgba(0,0,0,.28), 0 0 15px rgba(34,211,238,.18);
+          }
+        }
+
+        @keyframes marStormDrift {
+          from { background-position: 0 0, 0 0, -70% 0; }
+          to { background-position: 0 0, 0 0, 120% 0; }
+        }
+
+        @keyframes marArcFlickerA {
+          0%,100% { opacity: .72; transform: translate(0,0); }
+          14% { opacity: .28; transform: translate(1px,-1px); }
+          17% { opacity: .92; }
+          43% { opacity: .56; transform: translate(-1px,1px); }
+          47% { opacity: .96; }
+          71% { opacity: .38; }
+          75% { opacity: .86; }
+        }
+
+        @keyframes marArcFlickerB {
+          0%,100% { opacity: .46; }
+          20% { opacity: .88; }
+          23% { opacity: .24; }
+          52% { opacity: .72; }
+          56% { opacity: .30; }
+          82% { opacity: .94; }
+        }
+
+        @keyframes marArcFlickerC {
+          0%,100% { opacity: .34; }
+          11% { opacity: .92; }
+          15% { opacity: .18; }
+          38% { opacity: .70; }
+          44% { opacity: .26; }
+          67% { opacity: .88; }
+          73% { opacity: .22; }
+        }
+
+        @keyframes marPerimeter {
+          0%,100% { opacity: .55; filter: brightness(.9); }
+          50% { opacity: 1; filter: brightness(1.35); }
+        }
+
+        @keyframes marChargeGlow {
+          0%,100% { opacity: .08; transform: scale(.96); }
+          50% { opacity: .24; transform: scale(1.04); }
+        }
+
+        @keyframes goldLivingEdge {
+          0%,100% {
+            border-color: rgba(212,175,55,.42);
+            box-shadow: 0 14px 34px rgba(0,0,0,.30), 0 0 8px rgba(212,175,55,.07);
+          }
+          50% {
+            border-color: rgba(255,224,112,.80);
+            box-shadow: 0 14px 34px rgba(0,0,0,.30), 0 0 17px rgba(212,175,55,.19);
+          }
+        }
+
+        @keyframes goldVeins {
+          0%,100% { background-position: 0% 20%; opacity: .40; }
+          50% { background-position: 100% 80%; opacity: .78; }
+        }
+
+        @keyframes goldLuxurySweep {
+          0%,18% { left: -26%; opacity: 0; }
+          28% { opacity: .94; }
+          60% { left: 116%; opacity: .72; }
+          70%,100% { left: 116%; opacity: 0; }
+        }
+
+        @keyframes goldSparks {
+          from { background-position: 5px 13px, 31px 4px, 18px 44px; }
+          to { background-position: 5px -81px, 31px -142px, 18px -158px; }
+        }
+
+        @keyframes goldInnerEdge {
+          0%,100% { opacity: .46; }
+          50% { opacity: .92; }
+        }
+
+        @keyframes goldMoltenGlow {
+          0%,100% { transform: translateX(-2%) scale(.96); opacity: .30; }
+          50% { transform: translateX(2%) scale(1.06); opacity: .62; }
+        }
+
+        @keyframes goldPowerPulse {
+          0%,72%,100% { opacity: 0; }
+          82% { opacity: .62; }
+          90% { opacity: .10; }
+        }
+
+        @keyframes sirLivingBorder {
+          0%,100% {
+            border-color: rgba(103,232,249,.58);
+            box-shadow: 0 14px 34px rgba(0,0,0,.30), 0 0 12px rgba(34,211,238,.12);
+          }
+          25% {
+            border-color: rgba(167,139,250,.72);
+            box-shadow: 0 14px 34px rgba(0,0,0,.30), 0 0 15px rgba(167,139,250,.14);
+          }
+          50% {
+            border-color: rgba(244,114,182,.70);
+            box-shadow: 0 14px 34px rgba(0,0,0,.30), 0 0 15px rgba(244,114,182,.13);
+          }
+          75% {
+            border-color: rgba(250,204,21,.52);
+            box-shadow: 0 14px 34px rgba(0,0,0,.30), 0 0 13px rgba(250,204,21,.10);
+          }
+        }
+
+        @keyframes sirDimensionRotate {
+          from { transform: rotate(0deg) scale(1); }
+          50% { transform: rotate(180deg) scale(1.13); }
+          to { transform: rotate(360deg) scale(1); }
+        }
+
+        @keyframes sirSpectralFlare {
+          0%,14% { left: -28%; opacity: 0; }
+          25% { opacity: .96; }
+          58% { left: 116%; opacity: .72; }
+          68%,100% { left: 116%; opacity: 0; }
+        }
+
+        @keyframes sirGlassRays {
+          0%,100% { background-position: 0% 50%; opacity: .48; }
+          50% { background-position: 100% 50%; opacity: .86; }
+        }
+
+        @keyframes sirPrismDust {
+          from { background-position: 7px 12px, 31px 3px, 18px 41px, 51px 22px; }
+          to { background-position: 7px -74px, 31px -131px, 18px -137px, 51px -204px; }
+        }
+
+        @keyframes sirLensDrift {
+          0%,100% { transform: translate(-2%,0) rotate(-2deg) scale(.96); }
+          50% { transform: translate(2%,1%) rotate(2deg) scale(1.06); }
+        }
+
+        @keyframes sirJackpotBloom {
+          0%,68%,100% { opacity: 0; transform: scale(.92); }
+          78% { opacity: .78; transform: scale(1.02); }
+          84% { opacity: .26; }
+          89% { opacity: .58; transform: scale(1.06); }
+          94% { opacity: .08; }
+        }
+
+
+        /* =====================================================
+           RARITY FX V4 — professional escalating hierarchy
+           EX -> SR -> IR -> MAR -> GOLD -> SIR
+           ===================================================== */
+
+        /* Kill the previous V3 cartoon bolt pieces for MAR. */
+        .rarity-fx-v4 .fx-primary::before,
+        .rarity-fx-v4 .fx-primary::after,
+        .rarity-fx-v4 .fx-secondary::before,
+        .rarity-fx-v4 .fx-secondary::after,
+        .rarity-fx-v4 .fx-extra::before,
+        .rarity-fx-v4 .fx-extra::after {
+          content: none !important;
+        }
+
+        /* Shared restraint: effects live inside the card and content stays crisp. */
+        .rarity-fx-v4 {
+          mix-blend-mode: normal;
+        }
+
+        /* EX — cool electric current / premium entry tier */
+        .hit-ex .fx-ambient {
+          inset: 0 !important;
+          opacity: .62 !important;
+          background:
+            radial-gradient(ellipse at 12% 50%, rgba(59,130,246,.22), transparent 26%),
+            radial-gradient(ellipse at 88% 50%, rgba(96,165,250,.12), transparent 24%) !important;
+          animation: v4ExBreath 2.8s ease-in-out infinite !important;
+        }
+
+        .hit-ex .fx-primary {
+          top: auto !important;
+          left: -15% !important;
+          bottom: 4px !important;
+          width: 28% !important;
+          height: 1px !important;
+          opacity: .9 !important;
+          transform: none !important;
+          background: linear-gradient(90deg, transparent, #93c5fd, transparent) !important;
+          box-shadow: 0 0 8px rgba(59,130,246,.55);
+          animation: v4EdgeRun 3s linear infinite !important;
+        }
+
+        /* SR — denser violet energy field + elegant drifting motes */
+        .hit-sr .fx-ambient {
+          inset: -12% !important;
+          opacity: .56 !important;
+          background:
+            radial-gradient(circle at 28% 75%, rgba(126,34,206,.25), transparent 30%),
+            radial-gradient(circle at 72% 30%, rgba(192,132,252,.18), transparent 28%) !important;
+          filter: blur(10px);
+          animation: v4SrField 3.2s ease-in-out infinite !important;
+        }
+
+        .hit-sr .fx-detail {
+          inset: 0 !important;
+          opacity: .52 !important;
+          background-image:
+            radial-gradient(circle, rgba(216,180,254,.78) 0 .8px, transparent 1.6px),
+            radial-gradient(circle, rgba(167,139,250,.58) 0 1px, transparent 1.8px) !important;
+          background-size: 46px 46px, 71px 71px !important;
+          animation: v4Motes 7s linear infinite !important;
+        }
+
+        /* IR — continuously shifting premium foil, like a card under light */
+        .hit-ir .fx-ambient {
+          inset: -25% !important;
+          opacity: .34 !important;
+          background: conic-gradient(
+            from 40deg,
+            rgba(251,146,60,.13),
+            rgba(244,114,182,.20),
+            rgba(167,139,250,.14),
+            rgba(34,211,238,.12),
+            rgba(251,146,60,.13)
+          ) !important;
+          filter: blur(22px);
+          animation: v4IrRotate 8s linear infinite !important;
+        }
+
+        .hit-ir .fx-primary {
+          top: -20% !important;
+          bottom: -20% !important;
+          left: -22% !important;
+          width: 14% !important;
+          opacity: 0 !important;
+          transform: rotate(10deg) !important;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,.52), rgba(244,114,182,.24), transparent) !important;
+          animation: v4FoilSweep 4.4s ease-in-out infinite !important;
+        }
+
+        /* MAR — constant realistic electrical field.
+           Thin SVG arcs wrap all four sides and pulse asynchronously. */
+        .hit-mar {
+          border-color: rgba(103,232,249,.46) !important;
+          animation: v4MarCardPulse 1.9s ease-in-out infinite !important;
+        }
+
+        .hit-mar .fx-primary,
+        .hit-mar .fx-secondary,
+        .hit-mar .fx-detail,
+        .hit-mar .fx-extra {
+          display: none !important;
+        }
+
+        .hit-mar .fx-ambient {
+          inset: 0 !important;
+          opacity: .48 !important;
+          background:
+            radial-gradient(ellipse at 50% 0%, rgba(34,211,238,.13), transparent 34%),
+            radial-gradient(ellipse at 50% 100%, rgba(59,130,246,.11), transparent 35%) !important;
+          animation: v4MarAtmosphere 2s ease-in-out infinite !important;
+        }
+
+        .mar-electric-field {
+          position: absolute;
+          inset: 2px;
+          width: calc(100% - 4px);
+          height: calc(100% - 4px);
+          z-index: 4;
+          overflow: visible;
+          pointer-events: none;
+        }
+
+        .electric-arc,
+        .electric-branch {
+          fill: none;
+          vector-effect: non-scaling-stroke;
+          stroke-linecap: round;
+          stroke-linejoin: round;
+        }
+
+        .electric-arc {
+          stroke: rgba(224,242,254,.96);
+          stroke-width: 1.35;
+          stroke-dasharray: 5 3 18 4 3 7;
+          filter: drop-shadow(0 0 2px rgba(255,255,255,.95)) drop-shadow(0 0 5px rgba(34,211,238,.85));
+        }
+
+        .electric-branch {
+          stroke: rgba(103,232,249,.82);
+          stroke-width: .85;
+          stroke-dasharray: 3 3 8 4;
+          filter: drop-shadow(0 0 3px rgba(34,211,238,.72));
+        }
+
+        .arc-a { animation: v4ArcA .92s steps(2,end) infinite; }
+        .arc-b { animation: v4ArcB 1.17s steps(2,end) infinite; }
+        .arc-c { animation: v4ArcC .78s steps(2,end) infinite; }
+        .arc-d { animation: v4ArcD 1.04s steps(2,end) infinite; }
+        .branch-a { animation: v4Branch .63s steps(2,end) infinite; }
+        .branch-b { animation: v4Branch .81s steps(2,end) infinite reverse; }
+        .branch-c { animation: v4Branch .71s steps(2,end) infinite; }
+        .branch-d { animation: v4Branch .96s steps(2,end) infinite reverse; }
+
+        .hit-mar .fx-flare {
+          inset: 0 !important;
+          opacity: .10 !important;
+          background: radial-gradient(circle at 50% 50%, rgba(224,242,254,.20), transparent 55%) !important;
+          animation: v4MarInnerPulse 1.45s ease-in-out infinite !important;
+        }
+
+        /* GOLD — visibly above MAR: living molten metal rather than electricity */
+        .hit-gold {
+          border-color: rgba(226,190,74,.56) !important;
+          background: linear-gradient(135deg, #050505, #141107 50%, #070604) !important;
+          animation: v4GoldEdge 2.8s ease-in-out infinite !important;
+        }
+
+        .hit-gold .fx-ambient {
+          inset: -10% !important;
+          opacity: .72 !important;
+          background:
+            repeating-linear-gradient(
+              126deg,
+              transparent 0 8%,
+              rgba(255,220,110,.03) 8.6%,
+              rgba(255,220,110,.30) 9.1%,
+              rgba(180,126,22,.10) 9.8%,
+              transparent 10.7% 19%
+            ) !important;
+          background-size: 190% 190% !important;
+          filter: blur(.4px);
+          animation: v4GoldVeins 5.5s ease-in-out infinite !important;
+        }
+
+        .hit-gold .fx-primary {
+          top: -25% !important;
+          bottom: -25% !important;
+          left: -20% !important;
+          width: 13% !important;
+          opacity: 0 !important;
+          transform: rotate(10deg) !important;
+          background: linear-gradient(90deg, transparent, rgba(255,247,198,.92), rgba(212,175,55,.32), transparent) !important;
+          animation: v4GoldSweep 4s ease-in-out infinite !important;
+        }
+
+        .hit-gold .fx-secondary {
+          inset: 0 !important;
+          opacity: .68 !important;
+          background-image:
+            radial-gradient(circle, rgba(255,238,155,.92) 0 .8px, transparent 1.7px),
+            radial-gradient(circle, rgba(212,175,55,.68) 0 1px, transparent 1.8px) !important;
+          background-size: 49px 49px, 77px 77px !important;
+          animation: v4GoldEmbers 6s linear infinite !important;
+        }
+
+        .hit-gold .fx-detail {
+          inset: 3px !important;
+          border: 1px solid rgba(255,225,125,.42) !important;
+          border-radius: inherit;
+          background: none !important;
+          box-shadow: inset 0 0 16px rgba(212,175,55,.08);
+          animation: v4GoldInner 2.2s ease-in-out infinite !important;
+        }
+
+        .hit-gold .fx-extra {
+          inset: 0 !important;
+          opacity: .58 !important;
+          background:
+            radial-gradient(ellipse at 18% 70%, rgba(250,204,21,.18), transparent 14%),
+            radial-gradient(ellipse at 58% 28%, rgba(212,175,55,.20), transparent 16%),
+            radial-gradient(ellipse at 86% 68%, rgba(255,228,128,.16), transparent 14%) !important;
+          filter: blur(9px);
+          animation: v4GoldPools 4.5s ease-in-out infinite !important;
+        }
+
+        /* SIR — top tier: animated prismatic glass with depth and flare */
+        .hit-sir {
+          border-color: rgba(196,181,253,.62) !important;
+          background: linear-gradient(135deg, #050712, #0e1225 50%, #070812) !important;
+          animation: v4SirEdge 3s linear infinite !important;
+        }
+
+        .hit-sir .fx-ambient {
+          inset: -72% !important;
+          opacity: .76 !important;
+          background: conic-gradient(
+            from 0deg,
+            rgba(34,211,238,.36),
+            rgba(99,102,241,.34),
+            rgba(167,139,250,.48),
+            rgba(244,114,182,.40),
+            rgba(250,204,21,.24),
+            rgba(52,211,153,.22),
+            rgba(34,211,238,.36)
+          ) !important;
+          filter: blur(24px);
+          animation: v4SirPrism 5.8s linear infinite !important;
+        }
+
+        .hit-sir .fx-primary {
+          top: -25% !important;
+          bottom: -25% !important;
+          left: -24% !important;
+          width: 15% !important;
+          opacity: 0 !important;
+          transform: rotate(11deg) !important;
+          background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(255,255,255,.16),
+            rgba(255,255,255,.96),
+            rgba(103,232,249,.32),
+            rgba(196,181,253,.36),
+            rgba(244,114,182,.30),
+            transparent
+          ) !important;
+          animation: v4SirFlare 3.8s ease-in-out infinite !important;
+        }
+
+        .hit-sir .fx-secondary {
+          inset: 0 !important;
+          opacity: .78 !important;
+          background:
+            linear-gradient(112deg,
+              transparent 4%,
+              rgba(34,211,238,.14) 18%,
+              transparent 30%,
+              rgba(167,139,250,.18) 43%,
+              transparent 56%,
+              rgba(244,114,182,.16) 70%,
+              transparent 83%,
+              rgba(250,204,21,.09) 94%
+            ) !important;
+          background-size: 280% 100% !important;
+          animation: v4SirRays 4s ease-in-out infinite !important;
+        }
+
+        .hit-sir .fx-detail {
+          inset: 0 !important;
+          opacity: .72 !important;
+          border: none !important;
+          box-shadow: none !important;
+          background-image:
+            radial-gradient(circle, rgba(255,255,255,.96) 0 .8px, transparent 1.7px),
+            radial-gradient(circle, rgba(103,232,249,.78) 0 1px, transparent 1.8px),
+            radial-gradient(circle, rgba(244,114,182,.70) 0 .8px, transparent 1.6px),
+            radial-gradient(circle, rgba(196,181,253,.72) 0 .9px, transparent 1.7px) !important;
+          background-size: 41px 41px, 67px 67px, 91px 91px, 119px 119px !important;
+          animation: v4SirDust 5.8s linear infinite !important;
+        }
+
+        .hit-sir .fx-extra {
+          inset: -12% !important;
+          opacity: .52 !important;
+          background:
+            radial-gradient(ellipse at 26% 50%, transparent 0 14%, rgba(34,211,238,.15) 21%, transparent 33%),
+            radial-gradient(ellipse at 68% 44%, transparent 0 12%, rgba(244,114,182,.15) 20%, transparent 34%),
+            radial-gradient(ellipse at 50% 68%, transparent 0 12%, rgba(167,139,250,.16) 20%, transparent 34%) !important;
+          filter: blur(3px);
+          animation: v4SirLens 4.8s ease-in-out infinite !important;
+        }
+
+        .hit-sir .fx-flare {
+          inset: 0 !important;
+          opacity: 0 !important;
+          background:
+            radial-gradient(circle at 50% 50%, rgba(255,255,255,.26), transparent 17%),
+            radial-gradient(circle at 50% 50%, rgba(103,232,249,.18), transparent 38%),
+            linear-gradient(90deg, transparent, rgba(196,181,253,.13), transparent) !important;
+          animation: v4SirBloom 5.4s ease-in-out infinite !important;
+        }
+
+        @keyframes v4ExBreath {
+          0%,100% { opacity:.38; transform:scale(.98); }
+          50% { opacity:.78; transform:scale(1.02); }
+        }
+        @keyframes v4EdgeRun {
+          from { left:-15%; }
+          to { left:105%; }
+        }
+        @keyframes v4SrField {
+          0%,100% { transform:translate(-2%,1%) scale(.96); opacity:.38; }
+          50% { transform:translate(2%,-1%) scale(1.07); opacity:.74; }
+        }
+        @keyframes v4Motes {
+          from { background-position:0 0, 20px 30px; }
+          to { background-position:0 -92px, 20px -112px; }
+        }
+        @keyframes v4IrRotate {
+          from { transform:rotate(0deg) scale(1); }
+          to { transform:rotate(360deg) scale(1.05); }
+        }
+        @keyframes v4FoilSweep {
+          0%,18% { left:-22%; opacity:0; }
+          30% { opacity:.72; }
+          62% { left:112%; opacity:.50; }
+          72%,100% { left:112%; opacity:0; }
+        }
+
+        @keyframes v4MarCardPulse {
+          0%,100% { box-shadow:0 14px 34px rgba(0,0,0,.28),0 0 8px rgba(34,211,238,.10); }
+          50% { box-shadow:0 14px 34px rgba(0,0,0,.28),0 0 16px rgba(34,211,238,.20); }
+        }
+        @keyframes v4MarAtmosphere {
+          0%,100% { opacity:.32; }
+          50% { opacity:.62; }
+        }
+        @keyframes v4ArcA {
+          0% { opacity:.42; stroke-dashoffset:0; }
+          24% { opacity:1; }
+          27% { opacity:.30; }
+          54% { opacity:.82; stroke-dashoffset:-13; }
+          72% { opacity:.48; }
+          100% { opacity:.76; stroke-dashoffset:-26; }
+        }
+        @keyframes v4ArcB {
+          0% { opacity:.72; stroke-dashoffset:0; }
+          18% { opacity:.35; }
+          21% { opacity:.94; }
+          49% { opacity:.50; stroke-dashoffset:11; }
+          77% { opacity:1; }
+          100% { opacity:.52; stroke-dashoffset:24; }
+        }
+        @keyframes v4ArcC {
+          0% { opacity:.36; }
+          16% { opacity:.96; }
+          19% { opacity:.26; }
+          46% { opacity:.80; }
+          70% { opacity:.42; }
+          73% { opacity:1; }
+          100% { opacity:.58; }
+        }
+        @keyframes v4ArcD {
+          0% { opacity:.82; }
+          31% { opacity:.30; }
+          34% { opacity:.98; }
+          63% { opacity:.48; }
+          86% { opacity:.92; }
+          100% { opacity:.54; }
+        }
+        @keyframes v4Branch {
+          0%,100% { opacity:.22; }
+          35% { opacity:.92; }
+          41% { opacity:.30; }
+          72% { opacity:.74; }
+        }
+        @keyframes v4MarInnerPulse {
+          0%,100% { opacity:.06; transform:scale(.96); }
+          50% { opacity:.20; transform:scale(1.04); }
+        }
+
+        @keyframes v4GoldEdge {
+          0%,100% { box-shadow:0 14px 34px rgba(0,0,0,.30),0 0 9px rgba(212,175,55,.08); }
+          50% { box-shadow:0 14px 34px rgba(0,0,0,.30),0 0 18px rgba(212,175,55,.20); }
+        }
+        @keyframes v4GoldVeins {
+          0%,100% { background-position:0% 15%; opacity:.48; }
+          50% { background-position:100% 85%; opacity:.82; }
+        }
+        @keyframes v4GoldSweep {
+          0%,16% { left:-20%; opacity:0; }
+          27% { opacity:.96; }
+          58% { left:112%; opacity:.68; }
+          68%,100% { left:112%; opacity:0; }
+        }
+        @keyframes v4GoldEmbers {
+          from { background-position:5px 12px, 28px 5px; }
+          to { background-position:5px -86px, 28px -149px; }
+        }
+        @keyframes v4GoldInner {
+          0%,100% { opacity:.44; }
+          50% { opacity:.94; }
+        }
+        @keyframes v4GoldPools {
+          0%,100% { transform:translateX(-2%) scale(.96); opacity:.34; }
+          50% { transform:translateX(2%) scale(1.07); opacity:.68; }
+        }
+
+        @keyframes v4SirEdge {
+          0%,100% { border-color:rgba(103,232,249,.58); box-shadow:0 14px 34px rgba(0,0,0,.30),0 0 12px rgba(34,211,238,.12); }
+          25% { border-color:rgba(167,139,250,.76); box-shadow:0 14px 34px rgba(0,0,0,.30),0 0 16px rgba(167,139,250,.16); }
+          50% { border-color:rgba(244,114,182,.72); box-shadow:0 14px 34px rgba(0,0,0,.30),0 0 16px rgba(244,114,182,.14); }
+          75% { border-color:rgba(250,204,21,.52); box-shadow:0 14px 34px rgba(0,0,0,.30),0 0 14px rgba(250,204,21,.10); }
+        }
+        @keyframes v4SirPrism {
+          from { transform:rotate(0deg) scale(1); }
+          50% { transform:rotate(180deg) scale(1.13); }
+          to { transform:rotate(360deg) scale(1); }
+        }
+        @keyframes v4SirFlare {
+          0%,12% { left:-24%; opacity:0; }
+          24% { opacity:.98; }
+          56% { left:112%; opacity:.70; }
+          66%,100% { left:112%; opacity:0; }
+        }
+        @keyframes v4SirRays {
+          0%,100% { background-position:0% 50%; opacity:.52; }
+          50% { background-position:100% 50%; opacity:.90; }
+        }
+        @keyframes v4SirDust {
+          from { background-position:7px 12px,31px 3px,18px 41px,51px 22px; }
+          to { background-position:7px -70px,31px -131px,18px -141px,51px -216px; }
+        }
+        @keyframes v4SirLens {
+          0%,100% { transform:translate(-2%,0) rotate(-2deg) scale(.96); }
+          50% { transform:translate(2%,1%) rotate(2deg) scale(1.07); }
+        }
+        @keyframes v4SirBloom {
+          0%,65%,100% { opacity:0; transform:scale(.92); }
+          76% { opacity:.82; transform:scale(1.02); }
+          83% { opacity:.22; }
+          89% { opacity:.58; transform:scale(1.07); }
+          94% { opacity:.06; }
+        }
+
+        /* =====================================================
+           RARITY FX V5 — refinement pass
+           Keeps SR + MAR direction, restores Gold motion,
+           gives EX an identity, makes IR clearly > SR,
+           and makes SIR the unmistakable top tier.
+           ===================================================== */
+
+        /* EX — subtle but no longer empty:
+           a restrained blue plasma ribbon + edge current. */
+        .hit-ex {
+          border-color: rgba(96,165,250,.32) !important;
+        }
+
+        .hit-ex .fx-ambient {
+          inset: -8% !important;
+          opacity: .58 !important;
+          background:
+            radial-gradient(ellipse at 16% 55%, rgba(59,130,246,.22), transparent 24%),
+            radial-gradient(ellipse at 82% 42%, rgba(125,211,252,.12), transparent 24%),
+            linear-gradient(110deg, transparent 25%, rgba(59,130,246,.07) 48%, transparent 70%) !important;
+          background-size: 100% 100%, 100% 100%, 190% 100% !important;
+          animation: v5ExField 3.4s ease-in-out infinite !important;
+        }
+
+        .hit-ex .fx-primary {
+          display: block !important;
+          top: auto !important;
+          bottom: 3px !important;
+          left: -18% !important;
+          width: 25% !important;
+          height: 1px !important;
+          opacity: .9 !important;
+          transform: none !important;
+          background: linear-gradient(90deg, transparent, rgba(191,219,254,.95), rgba(59,130,246,.72), transparent) !important;
+          box-shadow: 0 0 7px rgba(59,130,246,.48);
+          animation: v5ExEdgeCurrent 2.9s linear infinite !important;
+        }
+
+        .hit-ex .fx-secondary {
+          display: block !important;
+          inset: 0 !important;
+          opacity: .34 !important;
+          background:
+            linear-gradient(118deg, transparent 10%, rgba(96,165,250,.09) 42%, transparent 58%) !important;
+          background-size: 210% 100% !important;
+          animation: v5ExRibbon 4.4s ease-in-out infinite !important;
+        }
+
+        /* IR — now a proper rarity jump over SR:
+           living aurora foil + interference bands + bright foil glint. */
+        .hit-ir {
+          border-color: rgba(244,114,182,.38) !important;
+          background:
+            radial-gradient(circle at 16% 20%, rgba(244,114,182,.045), transparent 26%),
+            radial-gradient(circle at 84% 78%, rgba(34,211,238,.045), transparent 28%),
+            linear-gradient(135deg, #08090d, #101016 52%, #08090c) !important;
+          animation: v5IrEdge 4.4s ease-in-out infinite !important;
+        }
+
+        .hit-ir .fx-ambient {
+          inset: -55% !important;
+          opacity: .58 !important;
+          background: conic-gradient(
+            from 30deg,
+            rgba(251,146,60,.16),
+            rgba(244,114,182,.30),
+            rgba(167,139,250,.24),
+            rgba(34,211,238,.22),
+            rgba(52,211,153,.13),
+            rgba(251,146,60,.16)
+          ) !important;
+          filter: blur(25px);
+          animation: v5IrAurora 8s linear infinite !important;
+        }
+
+        .hit-ir .fx-primary {
+          display: block !important;
+          top: -25% !important;
+          bottom: -25% !important;
+          left: -22% !important;
+          width: 14% !important;
+          opacity: 0 !important;
+          transform: rotate(11deg) !important;
+          background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(255,255,255,.12),
+            rgba(255,255,255,.72),
+            rgba(244,114,182,.34),
+            rgba(34,211,238,.24),
+            transparent
+          ) !important;
+          filter: blur(.3px);
+          animation: v5IrSweep 3.9s ease-in-out infinite !important;
+        }
+
+        .hit-ir .fx-secondary {
+          display: block !important;
+          inset: 0 !important;
+          opacity: .55 !important;
+          background:
+            repeating-linear-gradient(
+              118deg,
+              transparent 0 8%,
+              rgba(244,114,182,.07) 9%,
+              transparent 11% 18%,
+              rgba(34,211,238,.06) 19%,
+              transparent 21% 30%
+            ) !important;
+          background-size: 190% 160% !important;
+          animation: v5IrInterference 6.2s ease-in-out infinite !important;
+        }
+
+        .hit-ir .fx-detail {
+          display: block !important;
+          inset: 0 !important;
+          opacity: .42 !important;
+          border: none !important;
+          background:
+            radial-gradient(circle at 28% 35%, rgba(255,255,255,.30) 0 .7px, transparent 1.4px),
+            radial-gradient(circle at 72% 65%, rgba(244,114,182,.34) 0 .8px, transparent 1.5px) !important;
+          background-size: 54px 54px, 83px 83px !important;
+          animation: v5IrDust 8s linear infinite !important;
+        }
+
+        /* GOLD — restore obvious continuous movement.
+           Keep the V4 black/melted-gold identity the user likes. */
+        .hit-gold .fx-ambient {
+          inset: -18% !important;
+          opacity: .78 !important;
+          background:
+            repeating-linear-gradient(
+              126deg,
+              transparent 0 7%,
+              rgba(255,220,110,.035) 7.8%,
+              rgba(255,220,110,.34) 8.5%,
+              rgba(180,126,22,.12) 9.2%,
+              transparent 10.2% 18%
+            ) !important;
+          background-size: 220% 220% !important;
+          filter: blur(.45px);
+          animation: v5GoldVeins 4.6s linear infinite !important;
+        }
+
+        .hit-gold .fx-primary {
+          display: block !important;
+          top: -25% !important;
+          bottom: -25% !important;
+          left: -24% !important;
+          width: 14% !important;
+          opacity: 0 !important;
+          transform: rotate(10deg) !important;
+          background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(212,175,55,.18),
+            rgba(255,249,205,.96),
+            rgba(250,204,21,.38),
+            transparent
+          ) !important;
+          filter: blur(.35px);
+          animation: v5GoldSweep 3.7s ease-in-out infinite !important;
+        }
+
+        .hit-gold .fx-secondary {
+          display: block !important;
+          inset: 0 !important;
+          opacity: .72 !important;
+          background-image:
+            radial-gradient(circle, rgba(255,239,158,.95) 0 .8px, transparent 1.7px),
+            radial-gradient(circle, rgba(212,175,55,.72) 0 1px, transparent 1.8px) !important;
+          background-size: 47px 47px, 73px 73px !important;
+          animation: v5GoldEmbers 5.2s linear infinite !important;
+        }
+
+        .hit-gold .fx-extra {
+          display: block !important;
+          inset: -5% !important;
+          opacity: .66 !important;
+          background:
+            radial-gradient(ellipse at 18% 70%, rgba(250,204,21,.20), transparent 14%),
+            radial-gradient(ellipse at 58% 28%, rgba(212,175,55,.22), transparent 16%),
+            radial-gradient(ellipse at 86% 68%, rgba(255,228,128,.18), transparent 14%) !important;
+          filter: blur(8px);
+          animation: v5GoldMolten 3.8s ease-in-out infinite !important;
+        }
+
+        .hit-gold .fx-flare {
+          display: block !important;
+          inset: 0 !important;
+          opacity: .18 !important;
+          background: linear-gradient(105deg, transparent 25%, rgba(255,220,110,.09) 50%, transparent 75%) !important;
+          background-size: 220% 100% !important;
+          animation: v5GoldSurface 4.8s ease-in-out infinite !important;
+        }
+
+        /* SIR — top-tier showpiece:
+           animated holographic glass, aurora depth, spectral caustics,
+           crystal shimmer and periodic jackpot flare. */
+        .hit-sir {
+          border-color: rgba(196,181,253,.68) !important;
+          background:
+            radial-gradient(circle at 12% 16%, rgba(34,211,238,.065), transparent 25%),
+            radial-gradient(circle at 86% 82%, rgba(244,114,182,.065), transparent 27%),
+            linear-gradient(135deg, #050712, #0d1122 50%, #060711) !important;
+          animation: v5SirBorder 2.8s linear infinite !important;
+        }
+
+        .hit-sir .fx-ambient {
+          inset: -75% !important;
+          opacity: .86 !important;
+          background: conic-gradient(
+            from 0deg,
+            rgba(34,211,238,.44),
+            rgba(59,130,246,.30),
+            rgba(139,92,246,.48),
+            rgba(244,114,182,.46),
+            rgba(251,191,36,.28),
+            rgba(52,211,153,.25),
+            rgba(34,211,238,.44)
+          ) !important;
+          filter: blur(22px);
+          animation: v5SirAurora 5.1s linear infinite !important;
+        }
+
+        .hit-sir .fx-primary {
+          display: block !important;
+          top: -28% !important;
+          bottom: -28% !important;
+          left: -24% !important;
+          width: 16% !important;
+          opacity: 0 !important;
+          transform: rotate(11deg) !important;
+          background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(255,255,255,.12),
+            rgba(255,255,255,1),
+            rgba(103,232,249,.38),
+            rgba(196,181,253,.42),
+            rgba(244,114,182,.36),
+            transparent
+          ) !important;
+          filter: blur(.25px);
+          animation: v5SirSpectralSweep 3.25s ease-in-out infinite !important;
+        }
+
+        .hit-sir .fx-secondary {
+          display: block !important;
+          inset: -4% !important;
+          opacity: .82 !important;
+          background:
+            linear-gradient(
+              112deg,
+              transparent 4%,
+              rgba(34,211,238,.16) 16%,
+              transparent 27%,
+              rgba(167,139,250,.22) 40%,
+              transparent 52%,
+              rgba(244,114,182,.19) 65%,
+              transparent 78%,
+              rgba(250,204,21,.11) 91%,
+              transparent
+            ) !important;
+          background-size: 300% 100% !important;
+          filter: blur(.2px);
+          animation: v5SirCaustics 3.7s ease-in-out infinite !important;
+        }
+
+        .hit-sir .fx-detail {
+          display: block !important;
+          inset: 0 !important;
+          opacity: .82 !important;
+          border: none !important;
+          box-shadow: none !important;
+          background-image:
+            radial-gradient(circle, rgba(255,255,255,1) 0 .9px, transparent 1.8px),
+            radial-gradient(circle, rgba(103,232,249,.86) 0 1px, transparent 1.9px),
+            radial-gradient(circle, rgba(244,114,182,.80) 0 .9px, transparent 1.7px),
+            radial-gradient(circle, rgba(196,181,253,.82) 0 1px, transparent 1.8px) !important;
+          background-size: 37px 37px, 61px 61px, 83px 83px, 109px 109px !important;
+          animation: v5SirCrystalDust 5.1s linear infinite !important;
+        }
+
+        .hit-sir .fx-extra {
+          display: block !important;
+          inset: -16% !important;
+          opacity: .62 !important;
+          background:
+            radial-gradient(ellipse at 24% 48%, transparent 0 13%, rgba(34,211,238,.18) 20%, transparent 32%),
+            radial-gradient(ellipse at 70% 42%, transparent 0 11%, rgba(244,114,182,.18) 19%, transparent 33%),
+            radial-gradient(ellipse at 50% 70%, transparent 0 11%, rgba(167,139,250,.20) 19%, transparent 33%) !important;
+          filter: blur(2.5px);
+          animation: v5SirGlassDepth 4.2s ease-in-out infinite !important;
+        }
+
+        .hit-sir .fx-flare {
+          display: block !important;
+          inset: 0 !important;
+          opacity: 0 !important;
+          background:
+            radial-gradient(circle at 50% 50%, rgba(255,255,255,.32), transparent 14%),
+            radial-gradient(circle at 50% 50%, rgba(103,232,249,.21), transparent 34%),
+            radial-gradient(circle at 50% 50%, rgba(244,114,182,.13), transparent 52%) !important;
+          animation: v5SirJackpot 4.9s ease-in-out infinite !important;
+        }
+
+        @keyframes v5ExField {
+          0%,100% { background-position:0 0,0 0,-70% 0; opacity:.42; }
+          50% { background-position:0 0,0 0,110% 0; opacity:.68; }
+        }
+        @keyframes v5ExEdgeCurrent {
+          from { left:-18%; }
+          to { left:108%; }
+        }
+        @keyframes v5ExRibbon {
+          0%,100% { background-position:0% 50%; opacity:.20; }
+          50% { background-position:100% 50%; opacity:.48; }
+        }
+
+        @keyframes v5IrEdge {
+          0%,100% { border-color:rgba(244,114,182,.32); box-shadow:0 14px 34px rgba(0,0,0,.28),0 0 7px rgba(244,114,182,.05); }
+          50% { border-color:rgba(103,232,249,.48); box-shadow:0 14px 34px rgba(0,0,0,.28),0 0 11px rgba(34,211,238,.10); }
+        }
+        @keyframes v5IrAurora {
+          from { transform:rotate(0deg) scale(1); }
+          50% { transform:rotate(180deg) scale(1.08); }
+          to { transform:rotate(360deg) scale(1); }
+        }
+        @keyframes v5IrSweep {
+          0%,14% { left:-22%; opacity:0; }
+          26% { opacity:.84; }
+          59% { left:113%; opacity:.55; }
+          69%,100% { left:113%; opacity:0; }
+        }
+        @keyframes v5IrInterference {
+          0%,100% { background-position:0% 20%; opacity:.38; }
+          50% { background-position:100% 80%; opacity:.68; }
+        }
+        @keyframes v5IrDust {
+          from { background-position:0 0,25px 40px; }
+          to { background-position:0 -108px,25px -126px; }
+        }
+
+        @keyframes v5GoldVeins {
+          from { background-position:0% 0%; }
+          to { background-position:100% 100%; }
+        }
+        @keyframes v5GoldSweep {
+          0%,12% { left:-24%; opacity:0; }
+          24% { opacity:.98; }
+          57% { left:114%; opacity:.72; }
+          67%,100% { left:114%; opacity:0; }
+        }
+        @keyframes v5GoldEmbers {
+          from { background-position:5px 12px,28px 5px; }
+          to { background-position:5px -82px,28px -141px; }
+        }
+        @keyframes v5GoldMolten {
+          0%,100% { transform:translate(-2%,1%) scale(.95); opacity:.40; }
+          50% { transform:translate(2%,-1%) scale(1.08); opacity:.76; }
+        }
+        @keyframes v5GoldSurface {
+          0%,100% { background-position:0% 50%; opacity:.10; }
+          50% { background-position:100% 50%; opacity:.30; }
+        }
+
+        @keyframes v5SirBorder {
+          0%,100% { border-color:rgba(103,232,249,.62); box-shadow:0 14px 34px rgba(0,0,0,.30),0 0 13px rgba(34,211,238,.13); }
+          25% { border-color:rgba(167,139,250,.82); box-shadow:0 14px 34px rgba(0,0,0,.30),0 0 18px rgba(167,139,250,.18); }
+          50% { border-color:rgba(244,114,182,.78); box-shadow:0 14px 34px rgba(0,0,0,.30),0 0 18px rgba(244,114,182,.16); }
+          75% { border-color:rgba(250,204,21,.58); box-shadow:0 14px 34px rgba(0,0,0,.30),0 0 15px rgba(250,204,21,.11); }
+        }
+        @keyframes v5SirAurora {
+          from { transform:rotate(0deg) scale(1); }
+          50% { transform:rotate(180deg) scale(1.15); }
+          to { transform:rotate(360deg) scale(1); }
+        }
+        @keyframes v5SirSpectralSweep {
+          0%,10% { left:-24%; opacity:0; }
+          22% { opacity:1; }
+          55% { left:114%; opacity:.78; }
+          65%,100% { left:114%; opacity:0; }
+        }
+        @keyframes v5SirCaustics {
+          0%,100% { background-position:0% 50%; opacity:.56; }
+          50% { background-position:100% 50%; opacity:.94; }
+        }
+        @keyframes v5SirCrystalDust {
+          from { background-position:7px 12px,31px 3px,18px 41px,51px 22px; }
+          to { background-position:7px -62px,31px -119px,18px -125px,51px -196px; }
+        }
+        @keyframes v5SirGlassDepth {
+          0%,100% { transform:translate(-2%,0) rotate(-2deg) scale(.95); }
+          50% { transform:translate(2%,1%) rotate(2deg) scale(1.08); }
+        }
+        @keyframes v5SirJackpot {
+          0%,58%,100% { opacity:0; transform:scale(.90); }
+          69% { opacity:.92; transform:scale(1.02); }
+          76% { opacity:.24; }
+          83% { opacity:.68; transform:scale(1.08); }
+          90% { opacity:.07; }
+        }
+
+        /* =====================================================
+           RARITY FX V6 — IR / GOLD / SIR premium refinement
+           ===================================================== */
+
+        /* IR: near-MAR tier. More dimensional foil with moving spectral bands
+           and a clean diffraction flare, while remaining calmer than MAR. */
+        .hit-ir {
+          animation: v6IrEdge 3.5s ease-in-out infinite !important;
+        }
+
+        .hit-ir .fx-ambient {
+          inset: -62% !important;
+          opacity: .70 !important;
+          background: conic-gradient(
+            from 20deg,
+            rgba(251,146,60,.18),
+            rgba(244,114,182,.36),
+            rgba(167,139,250,.31),
+            rgba(34,211,238,.28),
+            rgba(52,211,153,.18),
+            rgba(250,204,21,.13),
+            rgba(251,146,60,.18)
+          ) !important;
+          filter: blur(23px);
+          animation: v6IrAurora 6.5s linear infinite !important;
+        }
+
+        .hit-ir .fx-primary {
+          top: -28% !important;
+          bottom: -28% !important;
+          left: -25% !important;
+          width: 16% !important;
+          opacity: 0 !important;
+          transform: rotate(10deg) !important;
+          background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(255,255,255,.10),
+            rgba(255,255,255,.88),
+            rgba(244,114,182,.42),
+            rgba(167,139,250,.30),
+            rgba(34,211,238,.32),
+            transparent
+          ) !important;
+          filter: blur(.25px);
+          animation: v6IrPrismSweep 3.25s ease-in-out infinite !important;
+        }
+
+        .hit-ir .fx-secondary {
+          inset: 0 !important;
+          opacity: .70 !important;
+          background:
+            repeating-linear-gradient(
+              116deg,
+              transparent 0 7%,
+              rgba(244,114,182,.10) 8%,
+              transparent 10% 15%,
+              rgba(34,211,238,.09) 16%,
+              transparent 18% 24%,
+              rgba(167,139,250,.08) 25%,
+              transparent 27% 34%
+            ) !important;
+          background-size: 220% 180% !important;
+          animation: v6IrBands 4.8s ease-in-out infinite !important;
+        }
+
+        .hit-ir .fx-extra {
+          display: block !important;
+          inset: -8% !important;
+          opacity: .48 !important;
+          background:
+            radial-gradient(ellipse at 24% 45%, transparent 0 13%, rgba(244,114,182,.15) 20%, transparent 31%),
+            radial-gradient(ellipse at 72% 58%, transparent 0 12%, rgba(34,211,238,.15) 19%, transparent 31%) !important;
+          filter: blur(3px);
+          animation: v6IrLens 4.2s ease-in-out infinite !important;
+        }
+
+        .hit-ir .fx-flare {
+          display: block !important;
+          inset: 0 !important;
+          opacity: 0 !important;
+          background:
+            radial-gradient(circle at 50% 50%, rgba(255,255,255,.20), transparent 14%),
+            linear-gradient(90deg, transparent, rgba(244,114,182,.12), rgba(34,211,238,.10), transparent) !important;
+          animation: v6IrFlash 5.2s ease-in-out infinite !important;
+        }
+
+        /* GOLD: replace the previous abstract vein motion with literal molten
+           gold running down the card. */
+        .hit-gold .fx-ambient,
+        .hit-gold .fx-primary,
+        .hit-gold .fx-secondary,
+        .hit-gold .fx-extra,
+        .hit-gold .fx-flare {
+          opacity: 0 !important;
+          animation: none !important;
+        }
+
+        .hit-gold {
+          position: relative;
+          overflow: hidden !important;
+          background:
+            radial-gradient(circle at 50% -10%, rgba(212,175,55,.13), transparent 36%),
+            linear-gradient(135deg, #050505, #151108 52%, #070604) !important;
+          border-color: rgba(225,190,75,.58) !important;
+          animation: v6GoldCardGlow 2.7s ease-in-out infinite !important;
+        }
+
+        .gold-molten-system {
+          position: absolute;
+          inset: 0;
+          z-index: 3;
+          overflow: hidden;
+          border-radius: inherit;
+          pointer-events: none;
+        }
+
+        .gold-top-pool {
+          position: absolute;
+          top: -5px;
+          left: -3%;
+          width: 106%;
+          height: 13px;
+          border-radius: 0 0 55% 45%;
+          background:
+            linear-gradient(180deg, rgba(255,247,190,.96), rgba(250,204,21,.88) 38%, rgba(154,101,14,.86));
+          box-shadow:
+            0 2px 5px rgba(255,225,110,.38),
+            0 7px 16px rgba(212,175,55,.15);
+          animation: v6GoldPool 3.2s ease-in-out infinite;
+        }
+
+        .gold-drip {
+          position: absolute;
+          top: 3px;
+          width: 5px;
+          height: 54%;
+          border-radius: 0 0 999px 999px;
+          transform-origin: top center;
+          background:
+            linear-gradient(
+              90deg,
+              rgba(132,82,8,.80),
+              rgba(250,204,21,.96) 32%,
+              rgba(255,245,181,1) 52%,
+              rgba(212,154,25,.94) 76%,
+              rgba(111,67,7,.78)
+            );
+          box-shadow:
+            0 0 5px rgba(250,204,21,.26),
+            inset 1px 0 1px rgba(255,255,255,.32);
+        }
+
+        .gold-drip::after {
+          content: "";
+          position: absolute;
+          left: 50%;
+          bottom: -4px;
+          width: 9px;
+          height: 9px;
+          transform: translateX(-50%);
+          border-radius: 50%;
+          background: radial-gradient(circle at 35% 30%, #fff6bd, #facc15 42%, #a16207 82%);
+          box-shadow: 0 0 6px rgba(250,204,21,.34);
+        }
+
+        .gold-drip-1 {
+          left: 15%;
+          height: 44%;
+          animation: v6GoldDripA 3.6s ease-in-out infinite;
+        }
+        .gold-drip-2 {
+          left: 39%;
+          width: 7px;
+          height: 68%;
+          animation: v6GoldDripB 4.3s ease-in-out infinite .45s;
+        }
+        .gold-drip-3 {
+          left: 68%;
+          width: 4px;
+          height: 51%;
+          animation: v6GoldDripA 3.9s ease-in-out infinite 1.1s;
+        }
+        .gold-drip-4 {
+          left: 86%;
+          width: 6px;
+          height: 61%;
+          animation: v6GoldDripB 4.6s ease-in-out infinite 1.7s;
+        }
+
+        .gold-drop {
+          position: absolute;
+          top: -12px;
+          width: 8px;
+          height: 11px;
+          border-radius: 55% 55% 62% 62%;
+          background: radial-gradient(circle at 35% 25%, #fff7c7, #facc15 43%, #9a6708 84%);
+          box-shadow: 0 0 6px rgba(250,204,21,.34);
+          opacity: 0;
+        }
+
+        .gold-drop-1 { left: 27%; animation: v6GoldDrop 3.4s ease-in infinite .2s; }
+        .gold-drop-2 { left: 57%; animation: v6GoldDrop 4.1s ease-in infinite 1.3s; }
+        .gold-drop-3 { left: 78%; animation: v6GoldDrop 3.7s ease-in infinite 2.1s; }
+
+        /* SIR: keep the classy holographic depth but add an unmistakable
+           top-tier flash signature: crystalline starbursts + expanding prism ring. */
+        .hit-sir .fx-ambient {
+          opacity: .90 !important;
+        }
+
+        .hit-sir .fx-primary {
+          animation-duration: 2.9s !important;
+        }
+
+        .hit-sir .fx-secondary {
+          opacity: .88 !important;
+          animation-duration: 3.25s !important;
+        }
+
+        .sir-flash-system {
+          position: absolute;
+          inset: 0;
+          z-index: 4;
+          overflow: hidden;
+          border-radius: inherit;
+          pointer-events: none;
+        }
+
+        .sir-starburst {
+          position: absolute;
+          width: 5px;
+          height: 5px;
+          border-radius: 50%;
+          opacity: 0;
+          background: #fff;
+          box-shadow:
+            0 0 6px rgba(255,255,255,.95),
+            0 0 14px rgba(103,232,249,.55),
+            0 0 22px rgba(196,181,253,.35);
+        }
+
+        .sir-starburst::before,
+        .sir-starburst::after {
+          content: "";
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,.95), transparent);
+          transform: translate(-50%,-50%);
+        }
+
+        .sir-starburst::before {
+          width: 74px;
+          height: 1px;
+        }
+
+        .sir-starburst::after {
+          width: 1px;
+          height: 74px;
+          background: linear-gradient(180deg, transparent, rgba(255,255,255,.95), transparent);
+        }
+
+        .sir-starburst-1 {
+          top: 28%;
+          left: 24%;
+          animation: v6SirStarA 4.2s ease-in-out infinite;
+        }
+
+        .sir-starburst-2 {
+          top: 68%;
+          left: 76%;
+          animation: v6SirStarB 4.2s ease-in-out infinite 1.7s;
+        }
+
+        .sir-rainbow-ring {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          width: 32%;
+          aspect-ratio: 1;
+          border-radius: 50%;
+          opacity: 0;
+          transform: translate(-50%,-50%) scale(.35);
+          border: 1px solid rgba(255,255,255,.70);
+          box-shadow:
+            0 -2px 10px rgba(34,211,238,.42),
+            2px 0 10px rgba(167,139,250,.40),
+            0 2px 10px rgba(244,114,182,.38),
+            -2px 0 10px rgba(250,204,21,.25);
+          animation: v6SirRing 5s ease-out infinite;
+        }
+
+        @keyframes v6IrEdge {
+          0%,100% {
+            border-color: rgba(244,114,182,.38);
+            box-shadow: 0 14px 34px rgba(0,0,0,.28), 0 0 8px rgba(244,114,182,.07);
+          }
+          50% {
+            border-color: rgba(103,232,249,.58);
+            box-shadow: 0 14px 34px rgba(0,0,0,.28), 0 0 14px rgba(34,211,238,.13);
+          }
+        }
+        @keyframes v6IrAurora {
+          from { transform: rotate(0deg) scale(1); }
+          50% { transform: rotate(180deg) scale(1.11); }
+          to { transform: rotate(360deg) scale(1); }
+        }
+        @keyframes v6IrPrismSweep {
+          0%,10% { left:-25%; opacity:0; }
+          23% { opacity:.94; }
+          57% { left:114%; opacity:.68; }
+          67%,100% { left:114%; opacity:0; }
+        }
+        @keyframes v6IrBands {
+          0%,100% { background-position:0% 15%; opacity:.48; }
+          50% { background-position:100% 85%; opacity:.80; }
+        }
+        @keyframes v6IrLens {
+          0%,100% { transform:translate(-2%,0) scale(.96); }
+          50% { transform:translate(2%,1%) scale(1.06); }
+        }
+        @keyframes v6IrFlash {
+          0%,70%,100% { opacity:0; transform:scale(.95); }
+          80% { opacity:.58; transform:scale(1.02); }
+          88% { opacity:.10; }
+        }
+
+        @keyframes v6GoldCardGlow {
+          0%,100% {
+            border-color:rgba(225,190,75,.48);
+            box-shadow:0 14px 34px rgba(0,0,0,.30),0 0 8px rgba(212,175,55,.08);
+          }
+          50% {
+            border-color:rgba(255,226,124,.80);
+            box-shadow:0 14px 34px rgba(0,0,0,.30),0 0 18px rgba(212,175,55,.21);
+          }
+        }
+        @keyframes v6GoldPool {
+          0%,100% { transform:translateY(-2px) scaleX(.98); filter:brightness(.92); }
+          50% { transform:translateY(1px) scaleX(1.02); filter:brightness(1.18); }
+        }
+        @keyframes v6GoldDripA {
+          0%,100% { transform:scaleY(.22); opacity:.54; }
+          45% { transform:scaleY(.86); opacity:.96; }
+          70% { transform:scaleY(1); opacity:.82; }
+        }
+        @keyframes v6GoldDripB {
+          0%,100% { transform:scaleY(.30); opacity:.48; }
+          38% { transform:scaleY(1); opacity:1; }
+          68% { transform:scaleY(.72); opacity:.78; }
+        }
+        @keyframes v6GoldDrop {
+          0%,22% { top:-12px; opacity:0; transform:scale(.65); }
+          28% { opacity:1; }
+          72% { opacity:.92; transform:scale(1); }
+          100% { top:108%; opacity:0; transform:scale(.72); }
+        }
+
+        @keyframes v6SirStarA {
+          0%,58%,100% { opacity:0; transform:scale(.35) rotate(0deg); }
+          68% { opacity:1; transform:scale(1.25) rotate(20deg); }
+          76% { opacity:.24; transform:scale(.78) rotate(35deg); }
+          82% { opacity:.78; transform:scale(1) rotate(45deg); }
+          90% { opacity:0; transform:scale(1.5) rotate(55deg); }
+        }
+        @keyframes v6SirStarB {
+          0%,60%,100% { opacity:0; transform:scale(.3) rotate(45deg); }
+          70% { opacity:.92; transform:scale(1.05) rotate(65deg); }
+          79% { opacity:.18; }
+          86% { opacity:.70; transform:scale(.86) rotate(80deg); }
+          94% { opacity:0; transform:scale(1.4) rotate(95deg); }
+        }
+        @keyframes v6SirRing {
+          0%,55% { opacity:0; transform:translate(-50%,-50%) scale(.25); }
+          65% { opacity:.78; }
+          88% { opacity:.18; }
+          100% { opacity:0; transform:translate(-50%,-50%) scale(3.6); }
+        }
+
+        /* =====================================================
+           V7 — IR signature spectral ribbons + heavier molten Gold
+           ===================================================== */
+
+        /* IR's equivalent of MAR lightning:
+           continuous luminous spectral ribbons flow across the whole card. */
+        .ir-spectral-field {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+          z-index: 4;
+          overflow: visible;
+          pointer-events: none;
+          opacity: .92;
+        }
+
+        .ir-ribbon {
+          fill: none;
+          vector-effect: non-scaling-stroke;
+          stroke-linecap: round;
+          stroke-width: 2.2;
+          stroke-dasharray: 34 13 8 12;
+        }
+
+        .ir-ribbon-a {
+          animation: v7IrRibbonA 3.8s ease-in-out infinite;
+        }
+
+        .ir-ribbon-b {
+          stroke-width: 1.65;
+          opacity: .76;
+          animation: v7IrRibbonB 4.5s ease-in-out infinite;
+        }
+
+        .ir-ribbon-c {
+          stroke-width: 1.05;
+          opacity: .58;
+          animation: v7IrRibbonC 3.2s ease-in-out infinite;
+        }
+
+        .hit-ir .fx-ambient {
+          opacity: .76 !important;
+          animation-duration: 5.8s !important;
+        }
+
+        .hit-ir .fx-primary {
+          animation-duration: 2.9s !important;
+        }
+
+        .hit-ir .fx-flare {
+          background:
+            radial-gradient(circle at 50% 50%, rgba(255,255,255,.24), transparent 13%),
+            radial-gradient(circle at 50% 50%, rgba(244,114,182,.13), transparent 32%),
+            linear-gradient(90deg, transparent, rgba(103,232,249,.11), rgba(244,114,182,.13), transparent) !important;
+          animation: v7IrPulse 4.4s ease-in-out infinite !important;
+        }
+
+        /* Gold: denser, longer streams. Existing four remain, but now most
+           streaks visibly travel deep into / all the way down the card. */
+        .gold-drip-1 {
+          left: 8% !important;
+          height: 94% !important;
+          width: 4px !important;
+          animation: v7GoldLongA 4.2s ease-in-out infinite !important;
+        }
+
+        .gold-drip-2 {
+          left: 22% !important;
+          height: 112% !important;
+          width: 7px !important;
+          animation: v7GoldLongB 5.0s ease-in-out infinite .4s !important;
+        }
+
+        .gold-drip-3 {
+          left: 36% !important;
+          height: 82% !important;
+          width: 3px !important;
+          animation: v7GoldLongA 4.6s ease-in-out infinite .9s !important;
+        }
+
+        .gold-drip-4 {
+          left: 51% !important;
+          height: 118% !important;
+          width: 6px !important;
+          animation: v7GoldLongB 5.4s ease-in-out infinite 1.4s !important;
+        }
+
+        .gold-drip-5 {
+          left: 63%;
+          height: 91%;
+          width: 4px;
+          animation: v7GoldLongA 4.8s ease-in-out infinite .7s;
+        }
+
+        .gold-drip-6 {
+          left: 73%;
+          height: 115%;
+          width: 7px;
+          animation: v7GoldLongB 5.3s ease-in-out infinite 1.8s;
+        }
+
+        .gold-drip-7 {
+          left: 84%;
+          height: 76%;
+          width: 3px;
+          animation: v7GoldLongA 4.1s ease-in-out infinite 1.2s;
+        }
+
+        .gold-drip-8 {
+          left: 93%;
+          height: 108%;
+          width: 5px;
+          animation: v7GoldLongB 5.6s ease-in-out infinite 2.2s;
+        }
+
+        .gold-drip {
+          top: -1px !important;
+          background:
+            linear-gradient(
+              90deg,
+              rgba(108,64,5,.78),
+              rgba(212,154,25,.92) 18%,
+              rgba(255,226,108,.98) 42%,
+              rgba(255,248,194,1) 54%,
+              rgba(230,174,43,.96) 72%,
+              rgba(117,70,6,.80)
+            ) !important;
+          box-shadow:
+            0 0 5px rgba(250,204,21,.25),
+            0 0 12px rgba(212,175,55,.09),
+            inset 1px 0 1px rgba(255,255,255,.32) !important;
+        }
+
+        .gold-top-pool {
+          height: 16px !important;
+          animation-duration: 2.7s !important;
+        }
+
+        @keyframes v7IrRibbonA {
+          0%,100% { stroke-dashoffset:0; opacity:.54; transform:translateY(3px); }
+          50% { stroke-dashoffset:-86; opacity:1; transform:translateY(-4px); }
+        }
+
+        @keyframes v7IrRibbonB {
+          0%,100% { stroke-dashoffset:40; opacity:.42; transform:translateY(-3px); }
+          50% { stroke-dashoffset:-72; opacity:.88; transform:translateY(4px); }
+        }
+
+        @keyframes v7IrRibbonC {
+          0%,100% { stroke-dashoffset:-20; opacity:.30; }
+          50% { stroke-dashoffset:-108; opacity:.72; }
+        }
+
+        @keyframes v7IrPulse {
+          0%,62%,100% { opacity:0; transform:scale(.94); }
+          73% { opacity:.68; transform:scale(1.02); }
+          80% { opacity:.16; }
+          86% { opacity:.46; transform:scale(1.05); }
+          92% { opacity:.04; }
+        }
+
+        @keyframes v7GoldLongA {
+          0%,100% { transform:scaleY(.20); opacity:.52; filter:brightness(.86); }
+          34% { transform:scaleY(.70); opacity:.92; filter:brightness(1.06); }
+          68% { transform:scaleY(1); opacity:1; filter:brightness(1.16); }
+          84% { transform:scaleY(.88); opacity:.82; }
+        }
+
+        @keyframes v7GoldLongB {
+          0%,100% { transform:scaleY(.28); opacity:.48; filter:brightness(.88); }
+          28% { transform:scaleY(.56); opacity:.78; }
+          57% { transform:scaleY(1); opacity:1; filter:brightness(1.18); }
+          76% { transform:scaleY(.92); opacity:.88; }
+        }
+
+        /* =====================================================
+           V8 — SIR signature: dimensional crystal fracture
+           ===================================================== */
+
+        .sir-fracture-system {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+          z-index: 4;
+          overflow: hidden;
+          pointer-events: none;
+        }
+
+        .sir-crack {
+          fill: none;
+          vector-effect: non-scaling-stroke;
+          stroke-linecap: round;
+          stroke-linejoin: round;
+          stroke-width: 1.35;
+          stroke-dasharray: 900;
+          stroke-dashoffset: 900;
+          opacity: 0;
+        }
+
+        .sir-crack-main {
+          animation: v8SirFractureMain 6.2s ease-in-out infinite;
+        }
+
+        .sir-crack-right {
+          animation-delay: .08s;
+        }
+
+        .sir-crack-down {
+          stroke-width: 1.15;
+          animation: v8SirFractureMain 6.2s ease-in-out infinite .15s;
+        }
+
+        .sir-crack-up {
+          stroke-width: 1.05;
+          animation: v8SirFractureMain 6.2s ease-in-out infinite .20s;
+        }
+
+        .sir-crack-branch {
+          stroke-width: .78;
+          animation: v8SirFractureBranch 6.2s ease-in-out infinite;
+        }
+
+        .branch-one { animation-delay: .20s; }
+        .branch-two { animation-delay: .27s; }
+        .branch-three { animation-delay: .24s; }
+        .branch-four { animation-delay: .31s; }
+        .branch-five { animation-delay: .35s; }
+        .branch-six { animation-delay: .29s; }
+
+        .sir-fracture-core {
+          fill: rgba(255,255,255,.98);
+          opacity: 0;
+          filter:
+            drop-shadow(0 0 4px rgba(255,255,255,1))
+            drop-shadow(0 0 12px rgba(103,232,249,.85))
+            drop-shadow(0 0 22px rgba(196,181,253,.55));
+          animation: v8SirCore 6.2s ease-in-out infinite;
+        }
+
+        /* During the fracture cycle, the whole SIR surface gets a brief
+           refractive pulse rather than simply becoming brighter. */
+        .hit-sir .fx-flare {
+          animation: v8SirRefractivePulse 6.2s ease-in-out infinite !important;
+        }
+
+        .hit-sir {
+          animation: v8SirGlassBorder 6.2s ease-in-out infinite !important;
+        }
+
+        @keyframes v8SirFractureMain {
+          0%,54% {
+            stroke-dashoffset:900;
+            opacity:0;
+          }
+          58% {
+            opacity:.96;
+          }
+          67% {
+            stroke-dashoffset:0;
+            opacity:1;
+          }
+          76% {
+            stroke-dashoffset:0;
+            opacity:.86;
+          }
+          83% {
+            stroke-dashoffset:-900;
+            opacity:.36;
+          }
+          88%,100% {
+            stroke-dashoffset:-900;
+            opacity:0;
+          }
+        }
+
+        @keyframes v8SirFractureBranch {
+          0%,58% {
+            stroke-dashoffset:900;
+            opacity:0;
+          }
+          64% {
+            opacity:.82;
+          }
+          72% {
+            stroke-dashoffset:0;
+            opacity:.92;
+          }
+          79% {
+            stroke-dashoffset:0;
+            opacity:.64;
+          }
+          85% {
+            stroke-dashoffset:-900;
+            opacity:.20;
+          }
+          89%,100% {
+            stroke-dashoffset:-900;
+            opacity:0;
+          }
+        }
+
+        @keyframes v8SirCore {
+          0%,54%,88%,100% {
+            opacity:0;
+            transform:scale(.3);
+            transform-origin:505px 126px;
+          }
+          59% {
+            opacity:1;
+            transform:scale(1.35);
+          }
+          66% {
+            opacity:.46;
+            transform:scale(.72);
+          }
+          72% {
+            opacity:.92;
+            transform:scale(1);
+          }
+          81% {
+            opacity:.22;
+            transform:scale(.55);
+          }
+        }
+
+        @keyframes v8SirRefractivePulse {
+          0%,53%,100% {
+            opacity:0;
+            transform:scale(.96);
+          }
+          59% {
+            opacity:.28;
+            transform:scale(.99);
+          }
+          68% {
+            opacity:.74;
+            transform:scale(1.025);
+          }
+          76% {
+            opacity:.22;
+            transform:scale(1.045);
+          }
+          84% {
+            opacity:.58;
+            transform:scale(1.065);
+          }
+          90% {
+            opacity:0;
+            transform:scale(1.08);
+          }
+        }
+
+        @keyframes v8SirGlassBorder {
+          0%,52%,100% {
+            border-color:rgba(103,232,249,.60);
+            box-shadow:
+              0 14px 34px rgba(0,0,0,.30),
+              0 0 13px rgba(34,211,238,.12);
+          }
+          60% {
+            border-color:rgba(196,181,253,.84);
+            box-shadow:
+              0 14px 34px rgba(0,0,0,.30),
+              0 0 18px rgba(196,181,253,.22);
+          }
+          68% {
+            border-color:rgba(255,255,255,.96);
+            box-shadow:
+              0 14px 34px rgba(0,0,0,.30),
+              0 0 8px rgba(255,255,255,.34),
+              0 0 22px rgba(103,232,249,.25),
+              inset 0 0 15px rgba(196,181,253,.08);
+          }
+          76% {
+            border-color:rgba(244,114,182,.76);
+            box-shadow:
+              0 14px 34px rgba(0,0,0,.30),
+              0 0 18px rgba(244,114,182,.17);
+          }
+          86% {
+            border-color:rgba(167,139,250,.70);
+          }
+        }
+
+        /* =====================================================
+           V8.1 — SIR fracture visibility fix
+           Normalised SVG drawing + persistent glass crack + strong pulse
+           ===================================================== */
+
+        .sir-fracture-system {
+          z-index: 8 !important;
+          opacity: 1 !important;
+          mix-blend-mode: screen;
+        }
+
+        .sir-fracture-glow {
+          opacity: 1 !important;
+        }
+
+        .sir-crack {
+          stroke-dasharray: 1 !important;
+          stroke-dashoffset: 0 !important;
+          opacity: .16 !important;
+          stroke-width: 1.45 !important;
+          animation: v81SirCrackPulse 4.8s ease-in-out infinite !important;
+        }
+
+        .sir-crack-branch {
+          opacity: .10 !important;
+          stroke-width: .9 !important;
+          animation: v81SirBranchPulse 4.8s ease-in-out infinite !important;
+        }
+
+        .sir-crack-right { animation-delay: .05s !important; }
+        .sir-crack-down { animation-delay: .10s !important; }
+        .sir-crack-up { animation-delay: .14s !important; }
+        .branch-one { animation-delay: .18s !important; }
+        .branch-two { animation-delay: .22s !important; }
+        .branch-three { animation-delay: .26s !important; }
+        .branch-four { animation-delay: .30s !important; }
+        .branch-five { animation-delay: .34s !important; }
+        .branch-six { animation-delay: .38s !important; }
+
+        .sir-fracture-core {
+          opacity: .14 !important;
+          animation: v81SirCorePulse 4.8s ease-in-out infinite !important;
+        }
+
+        /* A glassy shockwave accompanies the fracture so the SIR event
+           is impossible to miss even on a dark card/image. */
+        .sir-rainbow-ring {
+          z-index: 9 !important;
+          animation: v81SirShockwave 4.8s ease-out infinite !important;
+        }
+
+        .sir-starburst-1 {
+          z-index: 10 !important;
+          animation: v81SirBurstA 4.8s ease-in-out infinite !important;
+        }
+
+        .sir-starburst-2 {
+          z-index: 10 !important;
+          animation: v81SirBurstB 4.8s ease-in-out infinite !important;
+        }
+
+        @keyframes v81SirCrackPulse {
+          0%,45%,100% {
+            opacity:.14;
+            stroke-dashoffset:1;
+            filter:brightness(.85);
+          }
+          52% {
+            opacity:.42;
+            stroke-dashoffset:.72;
+          }
+          60% {
+            opacity:1;
+            stroke-dashoffset:0;
+            filter:brightness(1.7);
+          }
+          68% {
+            opacity:.92;
+            stroke-dashoffset:0;
+          }
+          77% {
+            opacity:.38;
+            stroke-dashoffset:-.35;
+          }
+          86% {
+            opacity:.14;
+            stroke-dashoffset:-1;
+          }
+        }
+
+        @keyframes v81SirBranchPulse {
+          0%,50%,100% { opacity:.08; stroke-dashoffset:1; }
+          58% { opacity:.34; stroke-dashoffset:.6; }
+          65% { opacity:.88; stroke-dashoffset:0; }
+          74% { opacity:.55; stroke-dashoffset:0; }
+          84% { opacity:.08; stroke-dashoffset:-1; }
+        }
+
+        @keyframes v81SirCorePulse {
+          0%,48%,100% { opacity:.10; transform:scale(.5); transform-origin:505px 126px; }
+          57% { opacity:1; transform:scale(1.8); }
+          64% { opacity:.45; transform:scale(.8); }
+          70% { opacity:.95; transform:scale(1.25); }
+          82% { opacity:.10; transform:scale(.5); }
+        }
+
+        @keyframes v81SirShockwave {
+          0%,53%,100% { opacity:0; transform:translate(-50%,-50%) scale(.18); }
+          60% { opacity:.95; }
+          78% { opacity:.28; }
+          88% { opacity:0; transform:translate(-50%,-50%) scale(4.4); }
+        }
+
+        @keyframes v81SirBurstA {
+          0%,52%,100% { opacity:0; transform:scale(.25) rotate(0deg); }
+          60% { opacity:1; transform:scale(1.55) rotate(25deg); }
+          68% { opacity:.28; transform:scale(.75) rotate(38deg); }
+          74% { opacity:.85; transform:scale(1.12) rotate(48deg); }
+          84% { opacity:0; transform:scale(1.8) rotate(62deg); }
+        }
+
+        @keyframes v81SirBurstB {
+          0%,57%,100% { opacity:0; transform:scale(.25) rotate(45deg); }
+          65% { opacity:.92; transform:scale(1.35) rotate(68deg); }
+          73% { opacity:.22; }
+          79% { opacity:.75; transform:scale(1) rotate(82deg); }
+          88% { opacity:0; transform:scale(1.65) rotate(98deg); }
+        }
+
+        /* =====================================================
+           RARITY FX — Lifetime mini cards + Best Pulls carousel
+           Reuses the exact same rarity identities as main hits.
+           ===================================================== */
+
+        .stat-box,
+        .showcase-hit-card {
+          position: relative;
+          isolation: isolate;
+          overflow: hidden;
+        }
+
+        .stat-box > .rarity-fx,
+        .showcase-hit-card > .rarity-fx {
+          position: absolute;
+          inset: 0;
+          border-radius: inherit;
+          overflow: hidden;
+          pointer-events: none;
+          z-index: 1;
+        }
+
+        .stat-box > :not(.rarity-fx),
+        .showcase-hit-card > :not(.rarity-fx) {
+          position: relative;
+          z-index: 3;
+        }
+
+        /* Mini cards use the same animations, just slightly restrained so the
+           count remains instantly readable. */
+        .stat-box > .rarity-fx {
+          opacity: .82;
+        }
+
+        .stat-box .mar-electric-field,
+        .stat-box .ir-spectral-field,
+        .stat-box .sir-fracture-system {
+          width: 100%;
+          height: 100%;
+        }
+
+        .stat-box .gold-molten-system {
+          inset: 0;
+        }
+
+        /* Gold drips should still reach the bottom even on the shorter cards. */
+        .stat-box.hit-gold .gold-drip {
+          min-height: 115%;
+        }
+
+        /* Keep the Best Pull card at full-strength premium presentation. */
+        .showcase-hit-card > .rarity-fx {
+          opacity: 1;
+        }
+
+        /* Readability layer: subtle dark glass behind mini-card numbers only. */
+        .stat-box .stat-label,
+        .stat-box .stat-number {
+          text-shadow: 0 1px 8px rgba(0,0,0,.72);
+        }
+
+        .stat-box .stat-number {
+          position: relative;
+          z-index: 4;
+        }
+
+        /* Best Pulls is intentionally the exact same card component as Calendar/Search. */
+        .best-pull-normal-card {
+          margin-top: 8px;
+          width: 100%;
+        }
+
+        .best-pull-normal-card > .hit-card {
+          width: 100%;
+          margin: 0;
+        }
+
+        .best-pull-normal-card > .best-hit-controls {
+          position: relative;
+          z-index: 10;
+          margin-top: 10px;
+        }
+
+
+        /* =====================================================
+           HOMEPAGE PALETTE MATCH — COLLECTOR VAULT
+           Exact approved homepage colours. Rarity effects untouched.
+           ===================================================== */
+        html, body {
+          background: #F3E8D7 !important;
+        }
+
+        body,
+        .page {
+          background: #F3E8D7 !important;
+          color: #10152D !important;
+        }
+
+        /* Collector identity/header = same Collectiverse navy */
+        .header {
+          background:
+            radial-gradient(circle at 50% 0%, rgba(72,91,190,.24), transparent 52%),
+            linear-gradient(180deg, #11176A 0%, #080D49 100%) !important;
+          color: #FFFFFF !important;
+          border: 0 !important;
+          border-radius: 20px !important;
+          padding: 18px 20px !important;
+          box-shadow: 0 8px 22px rgba(15,20,55,.13) !important;
+        }
+        .header h1,
+        .header p { color: #FFFFFF !important; }
+        .header p { opacity: .78 !important; }
+
+        /* Navigation pills */
+        .tab-button {
+          background: #FAF7F1 !important;
+          border: 1px solid rgba(16,21,45,.14) !important;
+          color: #10152D !important;
+          box-shadow: 0 5px 14px rgba(31,28,23,.06) !important;
+        }
+        .tab-button.active {
+          background: linear-gradient(135deg, #31559A 0%, #4774BE 100%) !important;
+          border-color: rgba(49,85,154,.35) !important;
+          color: #FFFFFF !important;
+          box-shadow: 0 7px 17px rgba(30,58,112,.18) !important;
+        }
+
+        /* Page typography */
+        .section-title {
+          background: none !important;
+          color: #10152D !important;
+          -webkit-text-fill-color: #10152D !important;
+          text-shadow: none !important;
+        }
+        .subsection-title,
+        .calendar-month,
+        .week-range,
+        .showcase-topline,
+        .showcase-title,
+        .showcase-stat-label,
+        .milestone-label,
+        .milestone-remaining,
+        .badge-label {
+          color: #10152D !important;
+          text-shadow: none !important;
+        }
+
+        .section-divider {
+          background: linear-gradient(90deg, transparent, rgba(16,21,45,.16), transparent) !important;
+        }
+
+        /* Warm ivory surface cards */
+        .break-date-card,
+        .collector-showcase,
+        .milestone-card,
+        .collector-badge,
+        .empty-state-card,
+        .vault-message,
+        .showcase-rank-card {
+          background: linear-gradient(145deg, #FAF7F1 0%, #F5F0E7 100%) !important;
+          border: 1px solid rgba(16,21,45,.14) !important;
+          color: #10152D !important;
+          box-shadow:
+            0 14px 34px rgba(31,28,23,.11),
+            0 2px 8px rgba(31,28,23,.055) !important;
+        }
+
+        .empty-state-card p,
+        .vault-message,
+        .showcase-hit-date,
+        .showcase-hit-break {
+          color: #62636A !important;
+        }
+
+        /* Archive controls use the same blue-grey + Collectiverse blue */
+        .calendar-nav,
+        .best-hit-button {
+          background: #E3E8F0 !important;
+          border: 1px solid rgba(38,58,104,.18) !important;
+          color: #10152D !important;
+          box-shadow: none !important;
+        }
+
+        .week-day,
+        .calendar-day {
+          background: #FAF7F1 !important;
+          border: 1px solid rgba(16,21,45,.13) !important;
+          color: #10152D !important;
+          box-shadow: 0 4px 12px rgba(31,28,23,.05) !important;
+        }
+
+        .week-day.has-break,
+        .calendar-day.has-break {
+          background: #E3E8F0 !important;
+          border-color: rgba(49,85,154,.30) !important;
+          color: #10152D !important;
+          box-shadow: inset 0 0 0 1px rgba(49,85,154,.05) !important;
+        }
+
+        .week-day.selected,
+        .calendar-day.selected {
+          background: linear-gradient(135deg, #31559A 0%, #4774BE 100%) !important;
+          border-color: rgba(255,255,255,.18) !important;
+          color: #FFFFFF !important;
+          box-shadow: 0 7px 17px rgba(30,58,112,.18) !important;
+        }
+        .week-day.selected * { color: #FFFFFF !important; }
+
+        /* Neutral total/stat surface. Tier stat cards retain rarity designs. */
+        .stat-box.stat-total {
+          background: linear-gradient(180deg, #11176A 0%, #080D49 100%) !important;
+          border: 1px solid rgba(255,255,255,.10) !important;
+          color: #FFFFFF !important;
+          box-shadow: 0 8px 22px rgba(15,20,55,.13) !important;
+        }
+        .stat-box.stat-total .stat-label,
+        .stat-box.stat-total .stat-number { color: #FFFFFF !important; }
+
+        .rank-pill {
+          background: rgba(255,255,255,.10) !important;
+          border: 1px solid rgba(255,255,255,.28) !important;
+          color: #FFFFFF !important;
+        }
+
+        /* Progress treatment mirrors homepage CTA blue */
+        .milestone-bar {
+          background: #E3E8F0 !important;
+          border: 1px solid rgba(38,58,104,.12) !important;
+        }
+        .milestone-fill {
+          background: linear-gradient(135deg, #31559A 0%, #4774BE 100%) !important;
+          box-shadow: 0 0 14px rgba(49,85,154,.20) !important;
+        }
+
+        /* Locked/unlocked badge surfaces stay warm rather than purple glass */
+        .collector-badge {
+          color: #10152D !important;
+        }
+
+        /* Demo notice translated into the same palette */
+        .demo-notice {
+          background: #E3E8F0 !important;
+          border: 1px solid rgba(49,85,154,.24) !important;
+          color: #10152D !important;
+          box-shadow: 0 8px 20px rgba(31,28,23,.08) !important;
+        }
+
+        /* Champagne/gold marks dates where this collector actually hit */
+        .week-day.has-break,
+        .calendar-day.has-break {
+          background: linear-gradient(145deg, #E8D5A8 0%, #D7BC7B 100%) !important;
+          border-color: rgba(154,119,49,.38) !important;
+          color: #10152D !important;
+          box-shadow: inset 0 0 0 1px rgba(255,255,255,.28), 0 5px 14px rgba(93,70,28,.10) !important;
+        }
+
+        /* Keep the currently selected date clearly selected, but within the palette */
+        .week-day.has-break.selected,
+        .calendar-day.has-break.selected {
+          background: linear-gradient(145deg, #CDB06A 0%, #B99545 100%) !important;
+          border-color: rgba(116,84,25,.45) !important;
+          color: #10152D !important;
+          box-shadow: 0 7px 17px rgba(93,70,28,.18) !important;
+        }
+        .week-day.has-break.selected * { color: #10152D !important; }
+
+        /* Final surface colours:
+           Lifetime Hits stays warm cream; Break Archive calendar is navy. */
+        .collector-showcase {
+          background: #F3E8D7 !important;
+        }
+
+        .break-date-card.week-archive {
+          background: linear-gradient(145deg, #10152D 0%, #171F42 100%) !important;
+          border-color: rgba(255,255,255,.12) !important;
+          box-shadow: 0 14px 34px rgba(16,21,45,.18) !important;
+        }
+
+        .break-date-card.week-archive .calendar-month,
+        .break-date-card.week-archive .week-range {
+          color: #FFFFFF !important;
+        }
+
+        .break-date-card.week-archive .calendar-nav {
+          background: rgba(255,255,255,.10) !important;
+          border-color: rgba(255,255,255,.18) !important;
+          color: #FFFFFF !important;
+        }
+
+        /* Match homepage Featured Hit typography: all hit-card copy is white */
+        .hit-card .hit-break,
+        .hit-card h3,
+        .showcase-hit-card .hit-break,
+        .showcase-hit-card h3,
+        .best-pull-normal-card .hit-break,
+        .best-pull-normal-card h3 {
+          color: #FFFFFF !important;
+          -webkit-text-fill-color: #FFFFFF !important;
+          text-shadow: 0 2px 10px rgba(0,0,0,.45) !important;
+          opacity: 1 !important;
+        }
+
+        /* Lifetime Hits total widget: Collectiverse navy */
+        .stat-box.stat-total {
+          background: linear-gradient(145deg, #151D63 0%, #0E154D 100%) !important;
+          border: 1px solid rgba(255,255,255,.12) !important;
+          color: #FFFFFF !important;
+          box-shadow: 0 12px 28px rgba(14,21,77,.20) !important;
+        }
+        .stat-box.stat-total .stat-label,
+        .stat-box.stat-total .stat-number,
+        .stat-box.stat-total .rank-pill {
+          color: #FFFFFF !important;
+          -webkit-text-fill-color: #FFFFFF !important;
+        }
+
+
+        /* =====================================================
+           LIFETIME STATS — MATCH APPROVED NAVY PALETTE
+           Keep all rarity animations/effects intact.
+           ===================================================== */
+
+        /* Entire Lifetime Stats widget/container */
+        .lifetime-stats,
+        .lifetime-stats-card,
+        .lifetime-stats-widget,
+        .lifetime-stats-panel,
+        .lifetime-panel,
+        .stats-card,
+        .stats-panel {
+          background:
+            radial-gradient(circle at 82% 0%, rgba(68,88,185,.18), transparent 38%),
+            linear-gradient(145deg, #111A59 0%, #080D3D 100%) !important;
+          border-color: rgba(255,255,255,.10) !important;
+          box-shadow:
+            0 14px 32px rgba(24,27,54,.16),
+            inset 0 1px 0 rgba(255,255,255,.04) !important;
+          color: #FFFFFF !important;
+        }
+
+        .lifetime-stats *,
+        .lifetime-stats-card *,
+        .lifetime-stats-widget *,
+        .lifetime-stats-panel *,
+        .lifetime-panel *,
+        .stats-card *,
+        .stats-panel * {
+          color: #FFFFFF;
+        }
+
+        /* Mini rarity cards:
+           use the SAME base background family as the full hit cards.
+           Pseudo-elements and animation layers are deliberately untouched. */
+        .lifetime-tier.sir,
+        .tier-mini.sir,
+        .mini-hit-card.sir,
+        [data-tier="SIR"].lifetime-tier,
+        [data-tier="sir"].lifetime-tier {
+          background-color: #111827 !important;
+        }
+
+        .lifetime-tier.gold,
+        .tier-mini.gold,
+        .mini-hit-card.gold,
+        [data-tier="Gold"].lifetime-tier,
+        [data-tier="gold"].lifetime-tier {
+          background-color: #17120A !important;
+        }
+
+        .lifetime-tier.mar,
+        .tier-mini.mar,
+        .mini-hit-card.mar,
+        [data-tier="MAR"].lifetime-tier,
+        [data-tier="mar"].lifetime-tier {
+          background-color: #0C1A29 !important;
+        }
+
+        .lifetime-tier.ir,
+        .tier-mini.ir,
+        .mini-hit-card.ir,
+        [data-tier="IR"].lifetime-tier,
+        [data-tier="ir"].lifetime-tier {
+          background-color: #17121E !important;
+        }
+
+        .lifetime-tier.sr,
+        .tier-mini.sr,
+        .mini-hit-card.sr,
+        [data-tier="SR"].lifetime-tier,
+        [data-tier="sr"].lifetime-tier {
+          background-color: #171523 !important;
+        }
+
+        .lifetime-tier.ex,
+        .tier-mini.ex,
+        .mini-hit-card.ex,
+        [data-tier="EX"].lifetime-tier,
+        [data-tier="ex"].lifetime-tier {
+          background-color: #101827 !important;
+        }
+
+        /* White labels/counts on the mini cards */
+        .lifetime-tier,
+        .lifetime-tier *,
+        .tier-mini,
+        .tier-mini *,
+        .mini-hit-card,
+        .mini-hit-card * {
+          color: #FFFFFF !important;
+          -webkit-text-fill-color: #FFFFFF !important;
+        }
+
+
+        /* Actual Lifetime Stats markup */
+        .stats-grid {
+          background:
+            radial-gradient(circle at 82% 0%, rgba(68,88,185,.18), transparent 38%),
+            linear-gradient(145deg, #111A59 0%, #080D3D 100%) !important;
+          border: 1px solid rgba(255,255,255,.10) !important;
+          border-radius: 18px !important;
+          padding: 12px !important;
+          box-shadow: 0 14px 32px rgba(24,27,54,.16) !important;
+        }
+
+        .stats-grid .stat-label,
+        .stats-grid .stat-number {
+          color: #FFFFFF !important;
+          -webkit-text-fill-color: #FFFFFF !important;
+        }
+
+        /* Base surfaces matched to the corresponding full-size rarity cards.
+           Existing rarity FX/pseudo-elements remain untouched. */
+        .stats-grid .stat-box.hit-sir { background-color: #111827 !important; }
+        .stats-grid .stat-box.hit-gold { background-color: #17120A !important; }
+        .stats-grid .stat-box.hit-mar { background-color: #0C1A29 !important; }
+        .stats-grid .stat-box.hit-ir { background-color: #17121E !important; }
+        .stats-grid .stat-box.hit-sr { background-color: #171523 !important; }
+        .stats-grid .stat-box.hit-ex { background-color: #101827 !important; }
+
+        .stats-grid .stat-box.hit-sir,
+        .stats-grid .stat-box.hit-gold,
+        .stats-grid .stat-box.hit-mar,
+        .stats-grid .stat-box.hit-ir,
+        .stats-grid .stat-box.hit-sr,
+        .stats-grid .stat-box.hit-ex {
+          color: #FFFFFF !important;
+          -webkit-text-fill-color: #FFFFFF !important;
+        }
+
+      
+
+        /* ==========================================================
+           CLC FULL HIT CARD — vintage paper + old camera/projector
+           Applies to archive cards, Best Pull card, and any HitCard
+           using getTierClass('clc'). No JSX/layout changes.
+           ========================================================== */
+        .hit-card.hit-clc,
+        .showcase-hit-card.hit-clc {
+          position: relative;
+          isolation: isolate;
+          overflow: hidden;
+          background:
+            radial-gradient(ellipse at 50% 42%, rgba(247,232,188,.98) 0%, rgba(211,181,119,.98) 48%, rgba(126,88,43,.99) 100%) !important;
+          border: 1px solid rgba(119,82,39,.92) !important;
+          box-shadow:
+            inset 0 0 58px rgba(61,35,10,.38),
+            0 16px 38px rgba(61,40,18,.28) !important;
+          animation: clcFullProjectorFlicker 5.1s steps(1,end) infinite;
+        }
+
+        .hit-card.hit-clc::before,
+        .showcase-hit-card.hit-clc::before {
+          content: '' !important;
+          position: absolute !important;
+          inset: -12% !important;
+          z-index: 0 !important;
+          opacity: .30 !important;
+          background:
+            radial-gradient(circle at 12% 18%, rgba(66,38,12,.32) 0 1px, transparent 1.7px),
+            radial-gradient(circle at 74% 63%, rgba(66,38,12,.24) 0 1px, transparent 1.8px),
+            repeating-radial-gradient(circle at 35% 42%, rgba(48,27,8,.22) 0 1px, transparent 1px 5px),
+            repeating-linear-gradient(7deg, rgba(72,42,15,.055) 0 1px, transparent 1px 6px) !important;
+          background-size: 43px 37px, 61px 53px, 8px 8px, auto !important;
+          animation: clcFullGrain .18s steps(2,end) infinite !important;
+          pointer-events: none;
+        }
+
+        .hit-card.hit-clc::after,
+        .showcase-hit-card.hit-clc::after {
+          content: '' !important;
+          position: absolute !important;
+          inset: 0 !important;
+          left: 0 !important;
+          top: 0 !important;
+          width: auto !important;
+          height: auto !important;
+          transform: none !important;
+          z-index: 1 !important;
+          opacity: 1 !important;
+          background:
+            linear-gradient(90deg,
+              transparent 0 18%,
+              rgba(255,248,215,.13) 18.15% 18.3%,
+              transparent 18.45% 72%,
+              rgba(61,34,10,.13) 72.1% 72.25%,
+              transparent 72.4% 100%),
+            radial-gradient(ellipse at center, transparent 39%, rgba(61,35,11,.12) 67%, rgba(39,21,7,.52) 100%) !important;
+          animation: clcFullExposure 3.9s ease-in-out infinite !important;
+          pointer-events: none;
+        }
+
+        .hit-card.hit-clc .hit-layout,
+        .hit-card.hit-clc .hit-content,
+        .showcase-hit-card.hit-clc .hit-layout,
+        .showcase-hit-card.hit-clc .hit-content {
+          position: relative;
+          z-index: 4;
+        }
+
+        .hit-card.hit-clc .hit-break,
+        .hit-card.hit-clc h3,
+        .showcase-hit-card.hit-clc .hit-break,
+        .showcase-hit-card.hit-clc h3 {
+          color: #FFFFFF !important;
+          -webkit-text-fill-color: #FFFFFF !important;
+          text-shadow:
+            0 2px 2px rgba(48,27,8,.72),
+            0 4px 14px rgba(48,27,8,.42) !important;
+        }
+
+        .hit-card.hit-clc .break-number,
+        .showcase-hit-card.hit-clc .break-number {
+          color: #FFFFFF !important;
+          -webkit-text-fill-color: #FFFFFF !important;
+          background: rgba(67,40,15,.36) !important;
+          border-color: rgba(255,245,208,.52) !important;
+          text-shadow: 0 2px 6px rgba(43,24,7,.72) !important;
+        }
+
+        .hit-card.hit-clc .badge-clc,
+        .showcase-hit-card.hit-clc .badge-clc {
+          color: #FFFFFF !important;
+          -webkit-text-fill-color: #FFFFFF !important;
+          background: rgba(67,40,15,.54) !important;
+          border: 1px solid rgba(255,231,166,.82) !important;
+          box-shadow:
+            inset 0 0 12px rgba(255,224,145,.12),
+            0 0 15px rgba(72,43,15,.20) !important;
+          text-shadow: 0 2px 6px rgba(43,24,7,.72) !important;
+        }
+
+        @keyframes clcFullProjectorFlicker {
+          0%,14%,16%,37%,39%,66%,68%,90%,92%,100% { filter: sepia(.24) contrast(1.04) brightness(1); }
+          15% { filter: sepia(.42) contrast(1.10) brightness(.91); }
+          38% { filter: sepia(.30) contrast(1.07) brightness(1.06); }
+          67% { filter: sepia(.46) contrast(1.11) brightness(.90); }
+          91% { filter: sepia(.34) contrast(1.07) brightness(1.04); }
+        }
+        @keyframes clcFullGrain {
+          0% { transform: translate(0,0); }
+          25% { transform: translate(-2px,1px); }
+          50% { transform: translate(1px,-2px); }
+          75% { transform: translate(2px,2px); }
+          100% { transform: translate(-1px,1px); }
+        }
+        @keyframes clcFullExposure {
+          0%,100% { opacity:.88; }
+          45% { opacity:1; }
+          47% { opacity:.80; }
+          50% { opacity:.96; }
+        }
+
+        /* CLC Lifetime Stats — same vintage paper / old-film identity */
+        .stats-grid .stat-box.hit-clc {
+          position: relative;
+          isolation: isolate;
+          overflow: hidden;
+          background:
+            radial-gradient(ellipse at 50% 42%, #f1e4bd 0%, #d6bd82 48%, #9d7540 100%) !important;
+          border: 1px solid rgba(111,77,34,.82) !important;
+          box-shadow:
+            inset 0 0 38px rgba(68,40,13,.30),
+            0 8px 22px rgba(68,45,22,.22) !important;
+          animation: clcProjectorFlicker 4.8s steps(1,end) infinite;
+        }
+
+        .stats-grid .stat-box.hit-clc .stat-label,
+        .stats-grid .stat-box.hit-clc .stat-number {
+          position: relative;
+          z-index: 5;
+          color: #FFFFFF !important;
+          -webkit-text-fill-color: #FFFFFF !important;
+          text-shadow: 0 2px 8px rgba(45,25,7,.72) !important;
+        }
+
+        .stats-grid .stat-box.hit-clc .clc-vintage-film {
+          position: absolute;
+          inset: 0;
+          z-index: 0;
+          pointer-events: none;
+          overflow: hidden;
+        }
+
+        .stats-grid .stat-box.hit-clc .clc-paper-texture {
+          position: absolute;
+          inset: 0;
+          opacity: .42;
+          background:
+            radial-gradient(circle at 12% 18%, rgba(75,45,18,.20) 0 1px, transparent 1.8px),
+            radial-gradient(circle at 77% 63%, rgba(75,45,18,.15) 0 1px, transparent 1.7px),
+            repeating-linear-gradient(8deg, rgba(75,45,18,.035) 0 1px, transparent 1px 5px);
+          background-size: 37px 31px, 53px 47px, auto;
+        }
+
+        .stats-grid .stat-box.hit-clc .clc-film-grain {
+          position: absolute;
+          inset: -12%;
+          opacity: .22;
+          background: repeating-radial-gradient(circle at 30% 40%, rgba(45,27,11,.35) 0 1px, transparent 1px 4px);
+          background-size: 7px 7px;
+          animation: clcGrain .16s steps(2,end) infinite;
+        }
+
+        .stats-grid .stat-box.hit-clc .clc-film-vignette {
+          position: absolute;
+          inset: 0;
+          background: radial-gradient(ellipse at center, transparent 42%, rgba(54,31,10,.16) 68%, rgba(43,24,8,.50) 100%);
+          animation: clcExposure 3.7s ease-in-out infinite;
+        }
+
+        .stats-grid .stat-box.hit-clc .clc-film-line {
+          position: absolute;
+          top: -10%;
+          height: 120%;
+          width: 1px;
+          background: rgba(255,249,218,.72);
+          opacity: .16;
+        }
+
+        .stats-grid .stat-box.hit-clc .clc-film-line-a { left: 22%; animation: clcScratchA 5.2s steps(1,end) infinite; }
+        .stats-grid .stat-box.hit-clc .clc-film-line-b { left: 79%; animation: clcScratchB 6.7s steps(1,end) infinite; }
+
+        @keyframes clcProjectorFlicker {
+          0%,15%,17%,38%,40%,67%,69%,91%,93%,100% { filter: sepia(.26) contrast(1.03) brightness(1); }
+          16% { filter: sepia(.42) contrast(1.08) brightness(.91); }
+          39% { filter: sepia(.32) contrast(1.06) brightness(1.06); }
+          68% { filter: sepia(.46) contrast(1.10) brightness(.90); }
+          92% { filter: sepia(.36) contrast(1.07) brightness(1.04); }
+        }
+        @keyframes clcGrain {
+          0% { transform: translate(0,0); }
+          25% { transform: translate(-2px,1px); }
+          50% { transform: translate(1px,-2px); }
+          75% { transform: translate(2px,2px); }
+          100% { transform: translate(-1px,1px); }
+        }
+        @keyframes clcExposure { 0%,100% { opacity:.76; } 50% { opacity:1; } }
+        @keyframes clcScratchA {
+          0%,26%,28%,65%,67%,100% { transform:translateX(0); opacity:.10; }
+          27% { transform:translateX(17px); opacity:.42; }
+          66% { transform:translateX(-11px); opacity:.30; }
+        }
+        @keyframes clcScratchB {
+          0%,34%,36%,72%,74%,100% { transform:translateX(0); opacity:.08; }
+          35% { transform:translateX(-14px); opacity:.35; }
+          73% { transform:translateX(9px); opacity:.26; }
+        }
+
+      
+        /* CLC visible old-film animation override */
+        .hit-card.hit-clc,
+        .showcase-hit-card.hit-clc {
+          animation: clcCameraBodyFlicker 3.2s steps(1,end) infinite !important;
+        }
+
+        .hit-card.hit-clc::before,
+        .showcase-hit-card.hit-clc::before {
+          display: block !important;
+          animation: clcMovingGrain .13s steps(2,end) infinite !important;
+          will-change: transform, opacity;
+        }
+
+        .hit-card.hit-clc::after,
+        .showcase-hit-card.hit-clc::after {
+          display: block !important;
+          animation: clcFilmGate 2.9s steps(1,end) infinite !important;
+          will-change: transform, opacity;
+        }
+
+        @keyframes clcCameraBodyFlicker {
+          0%, 11%, 13%, 31%, 33%, 54%, 56%, 77%, 79%, 100% {
+            filter: sepia(.22) brightness(1) contrast(1.03);
+          }
+          12% {
+            filter: sepia(.42) brightness(.84) contrast(1.14);
+          }
+          32% {
+            filter: sepia(.30) brightness(1.13) contrast(1.08);
+          }
+          55% {
+            filter: sepia(.46) brightness(.88) contrast(1.13);
+          }
+          78% {
+            filter: sepia(.34) brightness(1.09) contrast(1.07);
+          }
+        }
+
+        @keyframes clcMovingGrain {
+          0%   { transform: translate3d(-1.5%, -1%, 0) scale(1.04); opacity: .24; }
+          20%  { transform: translate3d(1%, 1.5%, 0) scale(1.05); opacity: .36; }
+          40%  { transform: translate3d(-.5%, 2%, 0) scale(1.04); opacity: .27; }
+          60%  { transform: translate3d(1.8%, -.8%, 0) scale(1.05); opacity: .39; }
+          80%  { transform: translate3d(-1%, 1%, 0) scale(1.04); opacity: .29; }
+          100% { transform: translate3d(1.2%, -1.5%, 0) scale(1.05); opacity: .35; }
+        }
+
+        @keyframes clcFilmGate {
+          0%, 19%, 21%, 48%, 50%, 73%, 75%, 100% {
+            transform: translateX(0) !important;
+            opacity: .92;
+          }
+          20% {
+            transform: translateX(3px) !important;
+            opacity: .58;
+          }
+          49% {
+            transform: translateX(-2px) !important;
+            opacity: 1;
+          }
+          74% {
+            transform: translateX(1px) !important;
+            opacity: .66;
+          }
+        }
+
+        @media (prefers-reduced-motion: no-preference) {
+          .hit-card.hit-clc .hit-layout,
+          .showcase-hit-card.hit-clc .hit-layout {
+            animation: clcFrameJitter 4.6s steps(1,end) infinite;
+          }
+        }
+
+        @keyframes clcFrameJitter {
+          0%, 23%, 25%, 61%, 63%, 100% { transform: translate(0,0); }
+          24% { transform: translate(0,-1px); }
+          62% { transform: translate(1px,0); }
+        }
+
       `}</style>
 
       <div className="wrap">
@@ -1849,13 +6384,6 @@ function MessageCard() {
           >
             Lifetime Hits
           </button>
-
-          <button
-            className={`tab-button ${tab === 'hall' ? 'active' : ''}`}
-            onClick={() => setTab('hall')}
-          >
-            Hall of Fame
-          </button>
         </div>
 		
 
@@ -1867,46 +6395,36 @@ function MessageCard() {
           <section>
             <h2 className="section-title">🌌 Break Archive</h2>
 
-            <div className="break-date-card">
-              <div className="calendar-header">
-                <button className="calendar-nav" onClick={() => changeMonth(-1)}>
+            <div className="break-date-card week-archive">
+              <div className="calendar-header week-header">
+                <button className="calendar-nav" onClick={() => changeWeek(-1)} aria-label="Previous week">
                   ‹
                 </button>
 
-                <div className="calendar-month">
-                  {new Date(selectedDate).toLocaleString('en-GB', {
-                    month: 'long',
-                    year: 'numeric',
-                  })}
+                <div>
+                  <div className="calendar-month">Break Archive</div>
+                  <div className="week-range">{weekLabel}</div>
                 </div>
 
-                <button className="calendar-nav" onClick={() => changeMonth(1)}>
+                <button className="calendar-nav" onClick={() => changeWeek(1)} aria-label="Next week">
                   ›
                 </button>
               </div>
 
-              <div className="calendar-grid">
-                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-                  <div key={day} className="calendar-day-label">
-                    {day}
-                  </div>
+              <div className="week-strip">
+                {weekItems.map((item) => (
+                  <button
+                    key={item.key}
+                    onClick={() => setSelectedDate(item.date)}
+                    className={`week-day ${item.hasBreak ? 'has-break' : ''} ${
+                      item.isSelected ? 'selected' : ''
+                    }`}
+                  >
+                    <span className="week-day-name">{item.dayName}</span>
+                    <span className="week-day-number">{item.dayNumber}</span>
+                    <span className="week-day-month">{item.monthName}</span>
+                  </button>
                 ))}
-
-                {calendarItems.map((item) =>
-                  item.day ? (
-                    <button
-                      key={item.key}
-                      onClick={() => setSelectedDate(item.date)}
-                      className={`calendar-day ${item.hasBreak ? 'has-break' : ''} ${
-                        item.isSelected ? 'selected' : ''
-                      }`}
-                    >
-                      {item.day}
-                    </button>
-                  ) : (
-                    <div key={item.key} />
-                  )
-                )}
               </div>
             </div>
 
@@ -1918,19 +6436,14 @@ function MessageCard() {
 
         {tab === 'lifetime' && isReady && (
           <section>
-            <h2 className="section-title">🏆 Lifetime Collection</h2>
+            <h2 className="section-title">🏆 Lifetime Stats</h2>
 
             <div className="collector-showcase">
               <div className="showcase-header">
                 <div>
-                  <div className="showcase-topline">Collector Showcase</div>
-                  <div className="showcase-title">{collectorTitle}</div>
-                </div>
-
-                <div className="showcase-rank-card">
-                  <div className="showcase-stat-label">Collector Rank</div>
-                  <div className="showcase-rank-value">
-                    {ranks.overall ? `#${ranks.overall}` : '-'}
+                  <div className="showcase-topline">Collector Rank</div>
+                  <div className="showcase-title">
+                    {ranks.overall ? `#${ranks.overall}` : 'Unranked'}
                   </div>
                 </div>
               </div>
@@ -1939,69 +6452,30 @@ function MessageCard() {
                 <div className="showcase-stat-label">Best Pulls</div>
 
                 {currentBestHit ? (
-                  <div className={`showcase-hit-card ${getTierClass(currentBestHit.hit_tier)}`}>
-                    {['sir', 'gold', 'mar'].includes(currentBestHit.hit_tier) && (
-                      <div className="cosmic-stars">
-                        <span>✦</span>
-                        <span>✧</span>
-                        <span>✦</span>
-                        <span>✧</span>
-                      </div>
-                    )}
+                  <div className="best-pull-normal-card">
+                    <HitCard hit={currentBestHit} />
 
-                    {currentBestHit.hit_tier === 'gold' && (
-                      <div className="planet-field">
-                        <span>🪐</span>
-                        <span>🌕</span>
-                      </div>
-                    )}
+                    {bestHits.length > 1 && (
+                      <div className="best-hit-controls">
+                        <button
+                          className="best-hit-button"
+                          onClick={() => changeBestHit(-1)}
+                        >
+                          ‹
+                        </button>
 
-                    {currentBestHit.hit_tier === 'sir' && (
-                      <div className="rocket-field">
-                        <span>🚀</span>
-                        <span>☄️</span>
-                      </div>
-                    )}
-
-                    <div className="hit-content">
-                      <div className={`hit-badge badge-${currentBestHit.hit_tier}`}>
-                        {getTierEmoji(currentBestHit.hit_tier)}{' '}
-                        {tierLabels[currentBestHit.hit_tier]}
-                      </div>
-
-                      <h3>{currentBestHit.spot_name}</h3>
-
-                      <div className="showcase-hit-date">
-                        Pulled{' '}
-                        {formatDate(currentBestHit.revealed_at || currentBestHit.stream_datetime)}
-                      </div>
-
-                      <div className="showcase-hit-break">
-                        {currentBestHit.break_name}
-                      </div>
-
-                      {bestHits.length > 1 && (
-                        <div className="best-hit-controls">
-                          <button
-                            className="best-hit-button"
-                            onClick={() => changeBestHit(-1)}
-                          >
-                            ‹
-                          </button>
-
-                          <div className="best-hit-count">
-                            {bestHitIndex + 1} / {bestHits.length}
-                          </div>
-
-                          <button
-                            className="best-hit-button"
-                            onClick={() => changeBestHit(1)}
-                          >
-                            ›
-                          </button>
+                        <div className="best-hit-count">
+                          {bestHitIndex + 1} / {bestHits.length}
                         </div>
-                      )}
-                    </div>
+
+                        <button
+                          className="best-hit-button"
+                          onClick={() => changeBestHit(1)}
+                        >
+                          ›
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="showcase-hit-card hit-default">
@@ -2016,62 +6490,6 @@ function MessageCard() {
               </div>
             </div>
 
-            <div className="milestone-card">
-              <div className="milestone-row">
-                <div>
-                  <div className="showcase-stat-label">Next Milestone</div>
-                  <div className="milestone-label">{nextMilestone.label}</div>
-                </div>
-
-                <div className="milestone-remaining">
-                  {nextMilestone.complete
-                    ? 'Complete'
-                    : `${nextMilestone.remaining} more hits`}
-                </div>
-              </div>
-
-              <div className="milestone-bar">
-                <div
-                  className="milestone-fill"
-                  style={{
-                    width: `${
-                      nextMilestone.complete
-                        ? 100
-                        : Math.min(100, (counts.overall / nextMilestone.target) * 100)
-                    }%`,
-                  }}
-                />
-              </div>
-            </div>
-
-            <h3 className="subsection-title">Permanent Achievements</h3>
-
-            <div className="badge-grid">
-              {permanentBadges.map((badge) => (
-                <div
-                  key={badge.label}
-                  className={`collector-badge ${badge.unlocked ? '' : 'locked'}`}
-                >
-                  <div className="badge-icon">{badge.icon}</div>
-                  <div className="badge-label">{badge.label}</div>
-                </div>
-              ))}
-            </div>
-
-            <h3 className="subsection-title">Current Status</h3>
-
-            <div className="badge-grid">
-              {statusBadges.map((badge) => (
-                <div
-                  key={badge.label}
-                  className={`collector-badge ${badge.unlocked ? '' : 'locked'}`}
-                >
-                  <div className="badge-icon">{badge.icon}</div>
-                  <div className="badge-label">{badge.label}</div>
-                </div>
-              ))}
-            </div>
-
             <div className="stats-grid">
               <div className="stat-box stat-total">
                 <div className="stat-label">🏆 Total Hits</div>
@@ -2080,128 +6498,57 @@ function MessageCard() {
               </div>
 
               <div className="stat-box hit-sir">
-                <div className="rocket-field">
-                  <span>🚀</span>
-                  <span>☄️</span>
-                </div>
-
-                <div className="stat-label">👑 SIR</div>
+                <RarityEffects tier="sir" />
+                <div className="stat-label">SIR</div>
                 <div className="stat-number">{counts.sir}</div>
-                <RankPill rank={ranks.sir} />
               </div>
 
               <div className="stat-box hit-gold">
-                <div className="planet-field">
-                  <span>🪐</span>
-                  <span>🌕</span>
-                </div>
-
-                <div className="stat-label">🥇 Gold</div>
+                <RarityEffects tier="gold" />
+                <div className="stat-label">Gold</div>
                 <div className="stat-number">{counts.gold}</div>
-                <RankPill rank={ranks.gold} />
               </div>
 
               <div className="stat-box hit-mar">
-                <div className="cosmic-stars">
-                  <span>✦</span>
-                  <span>✧</span>
-                  <span>✦</span>
-                  <span>✧</span>
-                </div>
-
-                <div className="stat-label">🌌 MAR</div>
+                <RarityEffects tier="mar" />
+                <div className="stat-label">MAR</div>
                 <div className="stat-number">{counts.mar}</div>
-                <RankPill rank={ranks.mar} />
               </div>
 
               <div className="stat-box hit-ir">
-                <div className="stat-label">⭐ IR</div>
+                <RarityEffects tier="ir" />
+                <div className="stat-label">IR</div>
                 <div className="stat-number">{counts.ir}</div>
-                <RankPill rank={ranks.ir} />
               </div>
 
               <div className="stat-box hit-sr">
-                <div className="stat-label">💎 SR</div>
+                <RarityEffects tier="sr" />
+                <div className="stat-label">SR</div>
                 <div className="stat-number">{counts.sr}</div>
-                <RankPill rank={ranks.sr} />
               </div>
 
               <div className="stat-box hit-ex">
-                <div className="stat-label">✨ EX</div>
+                <RarityEffects tier="ex" />
+                <div className="stat-label">EX</div>
                 <div className="stat-number">{counts.ex}</div>
-                <RankPill rank={ranks.ex} />
+              </div>
+
+              <div className="stat-box hit-clc lifetime-clc-stat">
+                <div className="clc-vintage-film" aria-hidden="true">
+                  <span className="clc-paper-texture" />
+                  <span className="clc-film-grain" />
+                  <span className="clc-film-vignette" />
+                  <span className="clc-film-line clc-film-line-a" />
+                  <span className="clc-film-line clc-film-line-b" />
+                </div>
+                <div className="stat-label">CLC</div>
+                <div className="stat-number">{counts.clc}</div>
               </div>
             </div>
           </section>
         )}
 
-        {tab === 'hall' && isReady && (
-          <section>
-            <h2 className="section-title">🏛️ Hall of Fame</h2>
 
-            <div className="hof-hero">
-              <div className="hof-hero-label">Your Collector Rank</div>
-
-              <div className="hof-hero-rank">
-                {ranks.overall ? `#${ranks.overall}` : 'Unranked'}
-              </div>
-
-              <div className="hof-title">{collectorTitle}</div>
-            </div>
-
-            <h3 className="subsection-title">Top 10 Collectors</h3>
-
-            <div className="hof-podium">
-              {hallOfFame[1] && (
-                <div className="podium-card podium-2">
-                  <div className="podium-medal">🥈</div>
-                  <div className="podium-rank">#{hallOfFame[1].rank}</div>
-                  <div className="podium-name">{hallOfFame[1].name}</div>
-                  <div className="podium-title">{hallOfFame[1].title}</div>
-                  <div className="podium-stat-label">Lifetime Hits</div>
-                  <div className="podium-stat">{hallOfFame[1].totalHits}</div>
-                </div>
-              )}
-
-              {hallOfFame[0] && (
-                <div className="podium-card podium-1">
-                  <div className="podium-medal">🥇</div>
-                  <div className="podium-rank">#{hallOfFame[0].rank}</div>
-                  <div className="podium-name">{hallOfFame[0].name}</div>
-                  <div className="podium-title">{hallOfFame[0].title}</div>
-                  <div className="podium-stat-label">Lifetime Hits</div>
-                  <div className="podium-stat">{hallOfFame[0].totalHits}</div>
-                </div>
-              )}
-
-              {hallOfFame[2] && (
-                <div className="podium-card podium-3">
-                  <div className="podium-medal">🥉</div>
-                  <div className="podium-rank">#{hallOfFame[2].rank}</div>
-                  <div className="podium-name">{hallOfFame[2].name}</div>
-                  <div className="podium-title">{hallOfFame[2].title}</div>
-                  <div className="podium-stat-label">Lifetime Hits</div>
-                  <div className="podium-stat">{hallOfFame[2].totalHits}</div>
-                </div>
-              )}
-            </div>
-
-            <div className="hof-list">
-              {hallOfFame.slice(3).map((item) => (
-                <div key={item.collectorId} className="hof-row">
-                  <div className="hof-name">
-                    #{item.rank} {item.name}
-                  </div>
-
-                  <div className="hof-meta">
-                    <div className="hof-tier-name">{item.title}</div>
-                    <div className="hof-hits">{item.totalHits} Lifetime Hits</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
       </div>
     </main>
   )

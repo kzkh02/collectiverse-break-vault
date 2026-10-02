@@ -4,11 +4,10 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '../../../../lib/supabase'
-import AdminGuard from '../../guard'
 
 type FilterMode = 'all' | 'hits' | 'not_hits' | 'featured'
 
-type TierId = '' | 'reverse_holo' | 'ex' | 'sr' | 'ir' | 'mar' | 'gold' | 'sir'
+type TierId = '' | 'reverse_holo' | 'ex' | 'sr' | 'ir' | 'mar' | 'gold' | 'sir' | 'clc'
 
 type EntryRow = {
   id: string
@@ -39,6 +38,7 @@ const tiers: { id: TierId; label: string; emoji: string }[] = [
   { id: 'mar', label: 'MAR', emoji: '🌌' },
   { id: 'gold', label: 'Gold', emoji: '🥇' },
   { id: 'sir', label: 'SIR', emoji: '👑' },
+  { id: 'clc', label: 'CLC', emoji: '🏆' },
 ]
 
 function formatStreamDateTime(value: string | null) {
@@ -66,12 +66,155 @@ function tierClass(tier: string | null) {
   return `tier-${tier}`
 }
 
-function baseSpotName(value: string) {
-  return value.replace(/ · Extra Hit \d+$/i, '').trim()
+
+const ASCENDED_SPECIAL_CHOICES: Record<string, string[]> = {
+  "all other ex's": [
+    'Dragapult EX',
+    'Mega Lucario EX',
+    "Cynthia's Garchomp EX",
+    'Cinderace EX',
+    "Erika's Vileplume EX",
+    'Azumarill EX',
+    "Team Rocket's Kangaskhan EX",
+    'Mega Gardevoir EX',
+    "Ethan's Ho-Oh EX",
+    'Zangoose EX',
+    'Registeel EX',
+    "Larry's Dudunsparce EX",
+    "Hop's Pincurchin EX",
+    'Koraidon EX',
+    'Voltorb EX',
+    'Regice EX',
+    'Togedemaru EX',
+    'Miraidon EX',
+    'Mandibuzz EX',
+    'Terapagos EX',
+    'Regirock EX',
+  ],
+  'all other exs': [
+    'Dragapult EX',
+    'Mega Lucario EX',
+    "Cynthia's Garchomp EX",
+    'Cinderace EX',
+    "Erika's Vileplume EX",
+    'Azumarill EX',
+    "Team Rocket's Kangaskhan EX",
+    'Mega Gardevoir EX',
+    "Ethan's Ho-Oh EX",
+    'Zangoose EX',
+    'Registeel EX',
+    "Larry's Dudunsparce EX",
+    "Hop's Pincurchin EX",
+    'Koraidon EX',
+    'Voltorb EX',
+    'Regice EX',
+    'Togedemaru EX',
+    'Miraidon EX',
+    'Mandibuzz EX',
+    'Terapagos EX',
+    'Regirock EX',
+  ],
+  'all items': ['Ultra Ball', "N's PP Up", "Team Rocket's Transceiver", 'Glass Trumpet'],
+  'all trainers': ["Boss's Orders", 'Anthea & Concordia', "Black Belt's Training", 'Cheren'],
+  'all other trainers': ["Boss's Orders", 'Anthea & Concordia', "Black Belt's Training", 'Cheren'],
 }
 
-function displayHitName(entry: EntryRow) {
-  return entry.hit_name || entry.spot_name
+function cleanSpotLabel(value: string) {
+  return String(value || '')
+    .replace(/ · Extra Hit \d+$/i, '')
+    .replace(/^[^\p{L}\p{N}'’]+/u, '')
+    .trim()
+}
+
+function spotChoiceKey(value: string) {
+  return cleanSpotLabel(value).toLowerCase().replace(/[’]/g, "'").replace(/\s+/g, ' ').trim()
+}
+
+function isAscendedBreak(name: string | null | undefined) {
+  return String(name || '').toLowerCase().includes('ascended')
+}
+
+function choicesForAscendedSpot(spotName: string): string[] {
+  const key = spotChoiceKey(spotName)
+
+  if (
+    key === "all other ex's" ||
+    key === 'all other exs' ||
+    key.startsWith("all other ex's ") ||
+    key.startsWith('all other exs ')
+  ) {
+    return ASCENDED_SPECIAL_CHOICES["all other ex's"]
+  }
+
+  if (key === 'all items' || key.startsWith('all items ')) {
+    return ASCENDED_SPECIAL_CHOICES['all items']
+  }
+
+  if (
+    key === 'all trainers' ||
+    key === 'all other trainers' ||
+    key.startsWith('all trainers ') ||
+    key.startsWith('all other trainers ')
+  ) {
+    return ASCENDED_SPECIAL_CHOICES['all other trainers']
+  }
+
+  // 30th Anniversary: the source spot is "Pikachu (SIR, EX)".
+  // SIR has Day/Night artwork choices; EX remains the normal Pikachu EX hit.
+  if (key === 'pikachu (sir, ex)' || key === 'pikachu (sir,ex)') {
+    return ['Pikachu Day', 'Pikachu Night']
+  }
+
+  // 30th Anniversary: RGB Mew has three separate colour artworks/hits.
+  if (key === 'rgb mew') {
+    return ['Red RGB Mew', 'Green RGB Mew', 'Blue RGB Mew']
+  }
+
+  // 30th Anniversary: Pikachu & Zekrom CLC remains one card/spot.
+  if (
+    key === 'pikachu & zekrom' ||
+    key === 'pikachu & zekrom (clc)'
+  ) {
+    return []
+  }
+
+  // Darkrai & Cresselia CLC has two separate artworks: Top and Bottom.
+  if (
+    key === 'darkrai & cresselia' ||
+    key === 'darkrai & cresselia (clc)'
+  ) {
+    return ['Darkrai & Cresselia Top', 'Darkrai & Cresselia Bottom']
+  }
+
+  // 30th Anniversary: the Meowth purchased spot has three separate IR hits/images.
+  if (
+    key === 'meowth ir & alolan meowth ir' ||
+    key === 'meowth & alolan meowth' ||
+    (key.includes('meowth') && key.includes('alolan meowth'))
+  ) {
+    return ['Meowth', 'Alolan Meowth', 'Galarian Meowth']
+  }
+
+  // 30th Anniversary: N / Misty is one purchased spot with two separate CLC hits.
+  // Match the real source label even when CLC is written beside each name.
+  if (/\bn\b/i.test(key) && /\bmisty\b/i.test(key)) {
+    return ['N', 'Misty']
+  }
+
+  // Mega Audino / Stunfisk is a combined purchased spot.
+  // Breaks only chooses the Pokémon; SR vs EX is handled by the tier dropdown.
+  if (key.includes('mega audino') && key.includes('stunfisk')) {
+    return ['Mega Audino', 'Stunfisk']
+  }
+
+  if (key.includes(' & ')) {
+    return cleanSpotLabel(spotName)
+      .split(/\s*&\s*/)
+      .map((item) => item.trim())
+      .filter(Boolean)
+  }
+
+  return []
 }
 
 export default function BreakPage() {
@@ -87,40 +230,34 @@ export default function BreakPage() {
   const [bulkTier, setBulkTier] = useState<TierId>('')
   const [bulkMode, setBulkMode] = useState(false)
   const [savingEntryId, setSavingEntryId] = useState<string | null>(null)
+  const [selectedHitNames, setSelectedHitNames] = useState<Record<string, string[]>>({})
 
   const totalSpots = entries.length
   const hitsMarked = entries.filter((entry) => entry.is_hit).length
-  const featuredHits = entries.filter((entry) => entry.featured_hit)
-  const [globalFeaturedCount, setGlobalFeaturedCount] = useState(0)
+  const featuredHit = entries.find((entry) => entry.featured_hit)
   const breakStatus = breakData?.status || 'open'
 
   const collectorSummary = useMemo(() => {
-    const summary = new Map<string, { name: string; spots: Set<string>; hits: number }>()
+    const summary = new Map<string, { name: string; spots: number; hits: number }>()
 
     entries.forEach((entry) => {
       const key = entry.collector_id
       const current = summary.get(key) || {
         name: entry.collector_name || 'Unknown',
-        spots: new Set<string>(),
+        spots: 0,
         hits: 0,
       }
 
-      current.spots.add(baseSpotName(entry.spot_name))
+      current.spots += 1
       if (entry.is_hit) current.hits += 1
       summary.set(key, current)
     })
 
-    return Array.from(summary.values())
-      .map((item) => ({
-        name: item.name,
-        spots: item.spots.size,
-        hits: item.hits,
-      }))
-      .sort((a, b) => {
-        if (b.hits !== a.hits) return b.hits - a.hits
-        if (b.spots !== a.spots) return b.spots - a.spots
-        return a.name.localeCompare(b.name)
-      })
+    return Array.from(summary.values()).sort((a, b) => {
+      if (b.hits !== a.hits) return b.hits - a.hits
+      if (b.spots !== a.spots) return b.spots - a.spots
+      return a.name.localeCompare(b.name)
+    })
   }, [entries])
 
   const filteredEntries = useMemo(() => {
@@ -130,7 +267,6 @@ export default function BreakPage() {
       const matchesSearch =
         !query ||
         entry.spot_name.toLowerCase().includes(query) ||
-        String(entry.hit_name || '').toLowerCase().includes(query) ||
         String(entry.collector_name || '').toLowerCase().includes(query)
 
       const matchesFilter =
@@ -170,14 +306,6 @@ export default function BreakPage() {
       return
     }
 
-    const { count: featuredCount } = await supabase
-      .from('entries')
-      .select('*', { count: 'exact', head: true })
-      .eq('featured_hit', true)
-      .eq('is_hit', true)
-
-    setGlobalFeaturedCount(featuredCount || 0)
-
     const collectorIds = [
       ...new Set((entriesData || []).map((entry: any) => entry.collector_id).filter(Boolean)),
     ]
@@ -203,20 +331,95 @@ export default function BreakPage() {
     }))
 
     setEntries(entriesWithCollectors as EntryRow[])
+
+    const restoredSelections: Record<string, string[]> = {}
+    ;(entriesWithCollectors as EntryRow[]).forEach((entry) => {
+      const choices = choicesForAscendedSpot(entry.spot_name)
+      if (!choices.length || !entry.hit_name) return
+      const saved = String(entry.hit_name)
+        .split(' + ')
+        .map((item) => item.replace(/\s*\((Reverse Holo|EX|SR|IR|MAR|Gold|SIR|CLC)\)\s*$/i, '').trim())
+      restoredSelections[entry.id] = saved.filter((item) => choices.includes(item))
+    })
+    setSelectedHitNames(restoredSelections)
     setMessage('')
   }
 
-  async function updateHit(entryId: string, spotName: string, tier: TierId) {
+  async function updateHit(entryId: string, spotName: string, tier: TierId, explicitHitNames?: string[]) {
     setSavingEntryId(entryId)
 
-    const isHit = tier !== ''
+    // 30th source data labels Umbreon/Espeon as IR, but the cards are EX.
+    // Force the saved tier to EX so image lookup matches Umbreon EX / Espeon EX.
+    const spotKey = spotChoiceKey(spotName)
+    const correctedTier: TierId =
+      spotKey === 'umbreon (ir)' || spotKey === 'espeon (ir)'
+        ? (tier === '' ? '' : 'ex')
+        : tier
+
+    const isHit = correctedTier !== ''
+    const availableChoices =
+      choicesForAscendedSpot(spotName)
+    const chosenNames = (explicitHitNames || selectedHitNames[entryId] || [])
+      .filter(Boolean)
+      .map((name) => {
+        // Split/grouped spots save the actual selected card name.
+        // Tier is stored separately in hit_tier, so don't duplicate it in hit_name.
+        if (availableChoices.length > 0) {
+          return String(name)
+            .replace(/\s+(SIR|GOLD|MAR|IR|SR|CLC)$/i, '')
+            .trim()
+        }
+        return name
+      })
+
+    // For a grouped Ascended spot, don't save the generic parent label.
+    // The user must choose the actual card(s) pulled first.
+    const pikachuSirExSpot =
+      spotChoiceKey(spotName) === 'pikachu (sir, ex)' ||
+      spotChoiceKey(spotName) === 'pikachu (sir,ex)'
+
+    if (
+      isHit &&
+      availableChoices.length > 0 &&
+      chosenNames.length === 0 &&
+      !(pikachuSirExSpot && correctedTier === 'ex')
+    ) {
+      setSavingEntryId(null)
+      setMessage('Choose the actual card pulled from this spot first.')
+      return
+    }
+
+    const isPikachuSirExSpot =
+      spotChoiceKey(spotName) === 'pikachu (sir, ex)' ||
+      spotChoiceKey(spotName) === 'pikachu (sir,ex)'
+
+    const hitName = isHit
+      ? (
+          isPikachuSirExSpot && tier === 'ex'
+            ? 'Pikachu EX'
+            : availableChoices.length > 0
+            ? chosenNames
+                .map((name) => {
+                  // All Other EX choices already contain EX and use that exact
+                  // image name. For split "&" cards, preserve the old working
+                  // format used by existing Vault hits: "Card Name (IR)" etc.
+                  const isAllOtherEx = spotChoiceKey(spotName).startsWith('all other ex')
+                  if (isAllOtherEx || !correctedTier) return name
+
+                  const label = tierLabel(correctedTier)
+                  return `${name} (${label})`
+                })
+                .join(' + ')
+            : spotName
+        )
+      : null
 
     const { error } = await supabase
       .from('entries')
       .update({
         is_hit: isHit,
-        hit_name: isHit ? spotName : null,
-        hit_tier: isHit ? tier : null,
+        hit_name: hitName,
+        hit_tier: isHit ? correctedTier : null,
         revealed_at: isHit ? new Date().toISOString() : null,
         featured_hit: isHit ? undefined : false,
       })
@@ -235,8 +438,8 @@ export default function BreakPage() {
           ? {
               ...entry,
               is_hit: isHit,
-              hit_name: isHit ? spotName : null,
-              hit_tier: isHit ? tier : null,
+              hit_name: hitName,
+              hit_tier: isHit ? correctedTier : null,
               revealed_at: isHit ? new Date().toISOString() : null,
               featured_hit: isHit ? entry.featured_hit : false,
             }
@@ -244,91 +447,15 @@ export default function BreakPage() {
       )
     )
 
+    if (!isHit) {
+      setSelectedHitNames((current) => {
+        const next = { ...current }
+        delete next[entryId]
+        return next
+      })
+    }
+
     setMessage('Saved')
-  }
-
-  async function updateHitName(entryId: string, hitName: string) {
-    const safeName = hitName.trim()
-
-    const { error } = await supabase
-      .from('entries')
-      .update({
-        hit_name: safeName || null,
-      })
-      .eq('id', entryId)
-
-    if (error) {
-      setMessage(error.message)
-      return
-    }
-
-    setEntries((current) =>
-      current.map((entry) =>
-        entry.id === entryId
-          ? {
-              ...entry,
-              hit_name: safeName || null,
-            }
-          : entry
-      )
-    )
-
-    setMessage('Hit name saved')
-  }
-
-  async function addExtraHit(entry: EntryRow) {
-    const hitName = window.prompt('What card did they hit? Example: Hawlucha')
-    if (!hitName?.trim()) return
-
-    const tierInput = window.prompt(
-      'What tier? Use: reverse_holo, ex, sr, ir, mar, gold, sir',
-      bulkTier || 'ex'
-    )
-
-    const tier = String(tierInput || '').trim().toLowerCase() as TierId
-
-    if (!tiers.some((item) => item.id === tier) || tier === '') {
-      setMessage('Invalid tier. Use reverse_holo, ex, sr, ir, mar, gold or sir.')
-      return
-    }
-
-    const extraCount =
-      entries.filter(
-        (item) =>
-          item.collector_id === entry.collector_id &&
-          baseSpotName(item.spot_name) === baseSpotName(entry.spot_name) &&
-          item.spot_name.includes('· Extra Hit')
-      ).length + 1
-
-    const { data, error } = await supabase
-      .from('entries')
-      .insert({
-        break_id: entry.break_id,
-        collector_id: entry.collector_id,
-        spot_name: `${baseSpotName(entry.spot_name)} · Extra Hit ${extraCount}`,
-        is_hit: true,
-        hit_name: hitName.trim(),
-        hit_tier: tier,
-        revealed_at: new Date().toISOString(),
-        featured_hit: false,
-      })
-      .select('*')
-      .single()
-
-    if (error || !data) {
-      setMessage(error?.message || 'Could not add extra hit.')
-      return
-    }
-
-    setEntries((current) => [
-      ...current,
-      {
-        ...(data as EntryRow),
-        collector_name: entry.collector_name,
-      },
-    ])
-
-    setMessage('Extra hit added')
   }
 
   async function applyBulkTier(entry: EntryRow) {
@@ -337,71 +464,13 @@ export default function BreakPage() {
   }
 
   async function featureHit(entryId: string) {
-    const entry = entries.find((item) => item.id === entryId)
-    if (!entry?.is_hit) {
-      setMessage('Only marked hits can be featured.')
-      return
-    }
-
-    if (entry.featured_hit) {
-      const { error } = await supabase
-        .from('entries')
-        .update({ featured_hit: false })
-        .eq('id', entryId)
-
-      if (error) {
-        setMessage(error.message)
-        return
-      }
-
-      setEntries((current) =>
-        current.map((item) =>
-          item.id === entryId ? { ...item, featured_hit: false } : item
-        )
-      )
-      setGlobalFeaturedCount((current) => Math.max(0, current - 1))
-      setMessage('Featured hit removed from the homepage')
-      return
-    }
-
-    const confirmed = window.confirm(
-      globalFeaturedCount >= 3
-        ? 'The homepage already has 3 featured hits. Add this one and automatically remove the oldest featured hit?'
-        : `Add this to the homepage featured carousel? ${globalFeaturedCount + 1}/3 slots will be used.`
-    )
+    const confirmed = window.confirm('Set this as the homepage featured hit?')
     if (!confirmed) return
 
-    let removedEntryId: string | null = null
-
-    if (globalFeaturedCount >= 3) {
-      const { data: oldestFeatured, error: oldestError } = await supabase
-        .from('entries')
-        .select('id')
-        .eq('featured_hit', true)
-        .eq('is_hit', true)
-        .order('revealed_at', { ascending: true })
-        .limit(1)
-        .maybeSingle()
-
-      if (oldestError) {
-        setMessage(oldestError.message)
-        return
-      }
-
-      if (oldestFeatured?.id) {
-        removedEntryId = String(oldestFeatured.id)
-
-        const { error: removeError } = await supabase
-          .from('entries')
-          .update({ featured_hit: false })
-          .eq('id', removedEntryId)
-
-        if (removeError) {
-          setMessage(removeError.message)
-          return
-        }
-      }
-    }
+    await supabase
+      .from('entries')
+      .update({ featured_hit: false })
+      .eq('featured_hit', true)
 
     const { error } = await supabase
       .from('entries')
@@ -409,56 +478,36 @@ export default function BreakPage() {
       .eq('id', entryId)
 
     if (error) {
-      if (removedEntryId) {
-        await supabase
-          .from('entries')
-          .update({ featured_hit: true })
-          .eq('id', removedEntryId)
-      }
-
       setMessage(error.message)
       return
     }
 
     setEntries((current) =>
-      current.map((item) => {
-        if (item.id === entryId) return { ...item, featured_hit: true }
-        if (removedEntryId && item.id === removedEntryId) {
-          return { ...item, featured_hit: false }
-        }
-        return item
-      })
+      current.map((entry) => ({
+        ...entry,
+        featured_hit: entry.id === entryId,
+      }))
     )
 
-    setGlobalFeaturedCount((current) => (current >= 3 ? 3 : current + 1))
-    setMessage(
-      removedEntryId
-        ? 'Hit added and the oldest featured hit was removed automatically'
-        : 'Hit added to the homepage featured carousel'
-    )
+    setMessage('Featured hit updated')
   }
 
-  async function clearFeaturedHit(entryId: string) {
-    const confirmed = window.confirm('Remove this hit from the homepage featured carousel?')
+  async function clearFeaturedHit() {
+    const confirmed = window.confirm('Clear the current homepage featured hit?')
     if (!confirmed) return
 
     const { error } = await supabase
       .from('entries')
       .update({ featured_hit: false })
-      .eq('id', entryId)
+      .eq('featured_hit', true)
 
     if (error) {
       setMessage(error.message)
       return
     }
 
-    setEntries((current) =>
-      current.map((entry) =>
-        entry.id === entryId ? { ...entry, featured_hit: false } : entry
-      )
-    )
-    setGlobalFeaturedCount((current) => Math.max(0, current - 1))
-    setMessage('Featured hit removed')
+    setEntries((current) => current.map((entry) => ({ ...entry, featured_hit: false })))
+    setMessage('Featured hit cleared')
   }
 
   async function completeBreak() {
@@ -584,8 +633,7 @@ export default function BreakPage() {
   }, [breakId])
 
   return (
-    <AdminGuard>
-      <main className="admin-page">
+    <main className="admin-page">
       <style jsx global>{`
         .admin-page {
           min-height: 100vh;
@@ -703,30 +751,6 @@ export default function BreakPage() {
           margin-top: 4px;
           color: rgba(255,255,255,.72);
           font-weight: 750;
-        }
-
-        .featured-list {
-          display: flex;
-          flex-direction: column;
-          gap: 10px;
-          flex: 1;
-        }
-
-        .featured-item {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          gap: 12px;
-          padding: 11px 12px;
-          border-radius: 15px;
-          border: 1px solid rgba(255,255,255,.12);
-          background: rgba(0,0,0,.14);
-        }
-
-        .featured-limit {
-          color: #fde68a;
-          font-weight: 900;
-          white-space: nowrap;
         }
 
         .tools {
@@ -859,7 +883,50 @@ export default function BreakPage() {
           align-items: center;
         }
 
+        .hit-choice-box {
+          margin-top: 10px;
+          padding: 10px;
+          border: 1px solid rgba(192,132,252,.30);
+          border-radius: 14px;
+          background: rgba(124,58,237,.10);
+        }
+
+        .hit-choice-title {
+          margin-bottom: 8px;
+          color: #e9ddff;
+          font-size: .78rem;
+          font-weight: 950;
+        }
+
+        .hit-choice-list {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 7px;
+        }
+
+        .hit-choice {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 7px 9px;
+          border: 1px solid rgba(255,255,255,.14);
+          border-radius: 10px;
+          background: rgba(0,0,0,.18);
+          color: white;
+          font-size: .78rem;
+          font-weight: 850;
+          cursor: pointer;
+        }
+
+        .hit-choice.selected {
+          border-color: rgba(192,132,252,.72);
+          background: rgba(124,58,237,.30);
+        }
+
+        .hit-choice input { accent-color: #a855f7; }
+
         .tier-sir { border-color: rgba(255,255,255,.38); box-shadow: 0 0 22px rgba(250,204,21,.18); }
+        .tier-clc { border-color: rgba(212,175,55,.78); box-shadow: 0 0 22px rgba(212,175,55,.24); }
         .tier-gold { border-color: rgba(250,204,21,.48); box-shadow: 0 0 22px rgba(250,204,21,.16); }
         .tier-mar { border-color: rgba(56,189,248,.42); }
         .tier-ir { border-color: rgba(251,113,133,.42); }
@@ -914,39 +981,26 @@ export default function BreakPage() {
         {message && <div className="message">{message}</div>}
 
         <section className="panel featured-panel">
-          <div className="featured-list">
-            <div>
-              <div className="panel-title">⭐ Homepage Featured Hits</div>
-              <div className="featured-sub">
-                Add up to 3 hits across all breaks. They will rotate in a carousel on the homepage.
-              </div>
-            </div>
-
-            {featuredHits.length > 0 ? (
-              featuredHits.map((featuredHit) => (
-                <div className="featured-item" key={featuredHit.id}>
-                  <div>
-                    <div className="featured-name">{displayHitName(featuredHit)}</div>
-                    <div className="featured-sub">
-                      {featuredHit.collector_name} · {tierEmoji(featuredHit.hit_tier)}{' '}
-                      {tierLabel(featuredHit.hit_tier)}
-                    </div>
-                  </div>
-
-                  <button
-                    className="admin-button"
-                    onClick={() => clearFeaturedHit(featuredHit.id)}
-                  >
-                    Remove
-                  </button>
+          <div>
+            <div className="panel-title">⭐ Current Featured Hit</div>
+            {featuredHit ? (
+              <>
+                <div className="featured-name">{featuredHit.spot_name}</div>
+                <div className="featured-sub">
+                  {featuredHit.collector_name} · {tierEmoji(featuredHit.hit_tier)}{' '}
+                  {tierLabel(featuredHit.hit_tier)}
                 </div>
-              ))
+              </>
             ) : (
-              <div className="featured-sub">No hits from this break are currently featured.</div>
+              <div className="featured-sub">No featured hit selected.</div>
             )}
           </div>
 
-          <div className="featured-limit">{globalFeaturedCount}/3 used</div>
+          {featuredHit && (
+            <button className="admin-button" onClick={clearFeaturedHit}>
+              Clear Featured
+            </button>
+          )}
         </section>
 
         <section className="panel">
@@ -1021,28 +1075,67 @@ export default function BreakPage() {
               onClick={() => applyBulkTier(entry)}
             >
               <div>
-                <div className="spot-name">{displayHitName(entry)}</div>
-                <div className="spot-owner">
-                  Owner: {entry.collector_name}
-                  {entry.hit_name && entry.hit_name !== entry.spot_name ? ` · Spot: ${baseSpotName(entry.spot_name)}` : ''}
-                </div>
+                <div className="spot-name">{entry.spot_name}</div>
+                <div className="spot-owner">Owner: {entry.collector_name}</div>
 
                 <div className="status-row">
                   <span className="tier-pill">
                     {entry.is_hit ? `${tierEmoji(entry.hit_tier)} ${tierLabel(entry.hit_tier)}` : 'Not hit'}
                   </span>
 
+                  {entry.is_hit && entry.hit_name && entry.hit_name !== entry.spot_name && (
+                    <span className="tier-pill">{entry.hit_name}</span>
+                  )}
+
                   {entry.featured_hit && <span className="featured-pill">⭐ Featured Hit</span>}
 
                   {savingEntryId === entry.id && <span className="tier-pill">Saving...</span>}
                 </div>
+
+                {choicesForAscendedSpot(entry.spot_name).length > 0 && (
+                  <div className="hit-choice-box" onClick={(event) => event.stopPropagation()}>
+                    <div className="hit-choice-title">Choose actual card(s) pulled</div>
+                    <div className="hit-choice-list">
+                      {choicesForAscendedSpot(entry.spot_name).map((choice) => {
+                        const selected = (selectedHitNames[entry.id] || []).includes(choice)
+                        return (
+                          <label className={`hit-choice ${selected ? 'selected' : ''}`} key={choice}>
+                            <input
+                              type="checkbox"
+                              checked={selected}
+                              onChange={() => {
+                                setSelectedHitNames((current) => {
+                                  const existing = current[entry.id] || []
+                                  const nextChoices = selected
+                                    ? existing.filter((item) => item !== choice)
+                                    : [...existing, choice]
+                                  return { ...current, [entry.id]: nextChoices }
+                                })
+                              }}
+                            />
+                            {spotChoiceKey(entry.spot_name).startsWith('all other ex')
+                              ? choice.replace(/\s+EX$/i, '')
+                              : choice}
+                          </label>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="entry-actions" onClick={(event) => event.stopPropagation()}>
                 <select
                   className="tier-select"
                   value={entry.hit_tier || ''}
-                  onChange={(event) => updateHit(entry.id, entry.spot_name, event.target.value as TierId)}
+                  onChange={(event) =>
+                    updateHit(
+                      entry.id,
+                      entry.spot_name,
+                      event.target.value as TierId,
+                      selectedHitNames[entry.id] || []
+                    )
+                  }
                 >
                   {tiers.map((tier) => (
                     <option key={tier.id} value={tier.id}>
@@ -1051,37 +1144,32 @@ export default function BreakPage() {
                   ))}
                 </select>
 
-                {entry.is_hit && (
-                  <>
-                    <input
-                      className="tier-select"
-                      value={entry.hit_name || entry.spot_name}
-                      onChange={(event) =>
-                        setEntries((current) =>
-                          current.map((item) =>
-                            item.id === entry.id ? { ...item, hit_name: event.target.value } : item
-                          )
-                        )
-                      }
-                      onBlur={(event) => updateHitName(entry.id, event.target.value)}
-                      placeholder="Hit card name"
-                    />
-
-                    <button className="admin-button gold" onClick={() => featureHit(entry.id)}>
-                      ⭐ Feature
-                    </button>
-                  </>
+                {entry.is_hit && choicesForAscendedSpot(entry.spot_name).length > 0 && (
+                  <button
+                    className="admin-button"
+                    onClick={() =>
+                      updateHit(
+                        entry.id,
+                        entry.spot_name,
+                        (entry.hit_tier || 'ex') as TierId,
+                        selectedHitNames[entry.id] || []
+                      )
+                    }
+                  >
+                    Save Cards
+                  </button>
                 )}
 
-                <button className="admin-button" onClick={() => addExtraHit(entry)}>
-                  + Extra Hit
-                </button>
+                {entry.is_hit && (
+                  <button className="admin-button gold" onClick={() => featureHit(entry.id)}>
+                    ⭐ Feature
+                  </button>
+                )}
               </div>
             </div>
           ))}
         </section>
       </div>
-      </main>
-    </AdminGuard>
+    </main>
   )
 }

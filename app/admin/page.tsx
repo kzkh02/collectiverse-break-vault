@@ -69,6 +69,13 @@ export default function AdminPage() {
           status: 'Live',
         },
         {
+          href: '/admin/sets',
+          emoji: '🖼️',
+          title: 'Sets & Hit Images',
+          desc: 'Manage set hit lists, upload card images and track image completion.',
+          status: 'Live',
+        },
+        {
           href: '/admin/streams',
           emoji: '🎛️',
           title: 'Breaks Centre',

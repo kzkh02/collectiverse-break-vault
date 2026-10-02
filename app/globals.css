@@ -24,3 +24,282 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* =========================================================
+   BREAK VAULT — HIT CARD ANIMATION TEST
+   This is intentionally obvious so we can confirm globals.css
+   is controlling the customer hit cards.
+   ========================================================= */
+
+.hit-card,
+.showcase-hit-card {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden !important;
+}
+
+/* Keep all real content above animation layers */
+.hit-card > *,
+.showcase-hit-card > * {
+  position: relative;
+  z-index: 5;
+}
+
+/* ---------- EX: blue travelling energy ---------- */
+.hit-card.hit-ex,
+.showcase-hit-card.hit-ex {
+  border-color: rgba(59, 130, 246, .62) !important;
+  animation: vaultExBorder 2.8s ease-in-out infinite !important;
+}
+
+.hit-card.hit-ex::before,
+.showcase-hit-card.hit-ex::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 0% 50%, rgba(59,130,246,.34), transparent 26%),
+    linear-gradient(90deg, transparent, rgba(96,165,250,.12), transparent);
+  animation: vaultExTravel 2.8s ease-in-out infinite;
+}
+
+/* ---------- SR: purple energy breathing ---------- */
+.hit-card.hit-sr::before,
+.showcase-hit-card.hit-sr::before {
+  content: "";
+  position: absolute;
+  inset: -15%;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 50% 100%, rgba(168,85,247,.42), transparent 42%),
+    radial-gradient(circle at 80% 20%, rgba(192,132,252,.20), transparent 28%);
+  animation: vaultSrPulse 3.2s ease-in-out infinite;
+}
+
+/* ---------- IR: holographic foil sweep ---------- */
+.hit-card.hit-ir::after,
+.showcase-hit-card.hit-ir::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -35%;
+  width: 24%;
+  z-index: 2;
+  pointer-events: none;
+  transform: skewX(-18deg);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(251,146,60,.12),
+    rgba(244,114,182,.48),
+    rgba(255,255,255,.62),
+    rgba(96,165,250,.22),
+    transparent
+  );
+  filter: blur(1px);
+  animation: vaultIrSweep 3.8s ease-in-out infinite;
+}
+
+/* ---------- MAR: lightning strike ---------- */
+.hit-card.hit-mar::before,
+.showcase-hit-card.hit-mar::before {
+  content: "";
+  position: absolute;
+  top: -18%;
+  left: 64%;
+  width: 15%;
+  height: 145%;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(
+    180deg,
+    #ffffff,
+    #bae6fd 35%,
+    #22d3ee 70%,
+    #ffffff
+  );
+  clip-path: polygon(
+    48% 0,
+    70% 0,
+    57% 30%,
+    78% 30%,
+    43% 60%,
+    62% 60%,
+    20% 100%,
+    35% 66%,
+    14% 66%,
+    43% 36%,
+    27% 36%
+  );
+  filter:
+    drop-shadow(0 0 4px rgba(255,255,255,1))
+    drop-shadow(0 0 12px rgba(34,211,238,1))
+    drop-shadow(0 0 24px rgba(14,165,233,.8));
+  animation: vaultMarBolt 3.8s steps(1,end) infinite;
+}
+
+.hit-card.hit-mar::after,
+.showcase-hit-card.hit-mar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    radial-gradient(circle at 68% 48%, rgba(224,242,254,.42), transparent 22%),
+    linear-gradient(90deg, transparent, rgba(34,211,238,.18), transparent);
+  animation: vaultMarFlash 3.8s steps(1,end) infinite;
+}
+
+/* ---------- GOLD: metallic reflection ---------- */
+.hit-card.hit-gold,
+.showcase-hit-card.hit-gold {
+  border-color: rgba(212,175,55,.56) !important;
+}
+
+.hit-card.hit-gold::after,
+.showcase-hit-card.hit-gold::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -30%;
+  width: 20%;
+  z-index: 2;
+  pointer-events: none;
+  transform: skewX(-18deg);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(212,175,55,.16),
+    rgba(255,246,196,.82),
+    rgba(250,204,21,.30),
+    transparent
+  );
+  animation: vaultGoldSweep 4s ease-in-out infinite;
+}
+
+/* ---------- SIR: moving prismatic foil ---------- */
+.hit-card.hit-sir::before,
+.showcase-hit-card.hit-sir::before {
+  content: "";
+  position: absolute;
+  inset: -70%;
+  z-index: 1;
+  pointer-events: none;
+  opacity: .52;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    rgba(34,211,238,.34) 50deg,
+    rgba(167,139,250,.42) 105deg,
+    rgba(244,114,182,.36) 165deg,
+    rgba(250,204,21,.24) 220deg,
+    rgba(34,211,238,.34) 285deg,
+    transparent 340deg
+  );
+  filter: blur(25px);
+  animation: vaultSirPrism 6s linear infinite;
+}
+
+.hit-card.hit-sir::after,
+.showcase-hit-card.hit-sir::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -30%;
+  width: 17%;
+  z-index: 2;
+  pointer-events: none;
+  transform: skewX(-18deg);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255,255,255,.08),
+    rgba(255,255,255,.66),
+    rgba(34,211,238,.25),
+    rgba(244,114,182,.22),
+    transparent
+  );
+  animation: vaultSirSweep 4s ease-in-out infinite;
+}
+
+@keyframes vaultExBorder {
+  0%,100% {
+    box-shadow: 0 0 0 rgba(59,130,246,0);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(59,130,246,.32);
+  }
+}
+
+@keyframes vaultExTravel {
+  0%,100% { transform: translateX(-18%); opacity: .35; }
+  50% { transform: translateX(18%); opacity: 1; }
+}
+
+@keyframes vaultSrPulse {
+  0%,100% { transform: scale(.94); opacity: .28; }
+  50% { transform: scale(1.08); opacity: .92; }
+}
+
+@keyframes vaultIrSweep {
+  0%,18% { left: -35%; opacity: 0; }
+  28% { opacity: .72; }
+  62% { left: 118%; opacity: .55; }
+  72%,100% { left: 118%; opacity: 0; }
+}
+
+@keyframes vaultMarBolt {
+  0%,62%,66%,70%,100% { opacity: 0; transform: rotate(8deg) scale(.84); }
+  63% { opacity: 1; transform: rotate(8deg) scale(1); }
+  64% { opacity: .12; }
+  65% { opacity: .92; transform: rotate(5deg) scale(.96); }
+  67% { opacity: .14; }
+  68% { opacity: .78; transform: rotate(10deg) scale(1.02); }
+  69% { opacity: .08; }
+}
+
+@keyframes vaultMarFlash {
+  0%,62%,66%,70%,100% { opacity: 0; }
+  63%,65%,68% { opacity: 1; }
+  64%,67%,69% { opacity: .10; }
+}
+
+@keyframes vaultGoldSweep {
+  0%,20% { left: -30%; opacity: 0; }
+  30% { opacity: .82; }
+  62% { left: 116%; opacity: .62; }
+  72%,100% { left: 116%; opacity: 0; }
+}
+
+@keyframes vaultSirPrism {
+  from { transform: rotate(0deg) scale(1); }
+  50% { transform: rotate(180deg) scale(1.08); }
+  to { transform: rotate(360deg) scale(1); }
+}
+
+@keyframes vaultSirSweep {
+  0%,16% { left: -30%; opacity: 0; }
+  28% { opacity: .72; }
+  62% { left: 118%; opacity: .54; }
+  72%,100% { left: 118%; opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hit-card,
+  .hit-card::before,
+  .hit-card::after,
+  .showcase-hit-card,
+  .showcase-hit-card::before,
+  .showcase-hit-card::after {
+    animation: none !important;
+  }
+}
