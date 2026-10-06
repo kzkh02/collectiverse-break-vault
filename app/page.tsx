@@ -1,7 +1,7 @@
 'use client'
 
 import Image from 'next/image'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../lib/supabase'
 import Link from 'next/link'
@@ -46,6 +46,30 @@ function getTierStyle(tier: string | null) {
   }
 }
 
+const CANONICAL_SET_NAMES = [
+  '30th Celebration',
+  'English 151',
+  'Ascended Heroes',
+  'Chaos Rising',
+  'Pitch Black',
+  'Crown Zenith',
+] as const
+
+function canonicalSetName(name: string | null) {
+  const cleaned = String(name || '')
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/Break\s+\d+/i, '')
+    .trim()
+
+  const lower = cleaned.toLowerCase()
+  const match = [...CANONICAL_SET_NAMES]
+    .sort((a, b) => b.length - a.length)
+    .find((setName) => lower.includes(setName.toLowerCase()))
+
+  return match || cleaned
+}
+
 function getBreakInfo(name: string | null) {
   const cleaned = String(name || '')
     .replace(/[^\w\s]/g, ' ')
@@ -53,7 +77,7 @@ function getBreakInfo(name: string | null) {
     .trim()
   const breakMatch = cleaned.match(/Break\s+(\d+)/i)
   return {
-    setName: cleaned.replace(/Break\s+\d+/i, '').trim(),
+    setName: canonicalSetName(cleaned),
     breakNumber: breakMatch?.[1] || '',
   }
 }
@@ -345,10 +369,13 @@ function ArchiveFeaturedHitCard({ hit, imageUrl }: { hit: any; imageUrl: string 
               <img className="hit-card-art" src={imageUrl} alt={resolvedCardName} />
             </div>
           )}
-          <div className="hit-content">
-            <div className="hit-break">{breakInfo.setName}</div>
-            {breakInfo.breakNumber && <div className="break-number">BREAK {breakInfo.breakNumber}</div>}
+          <div className="hit-content featured-home-copy">
+            <div className="featured-home-label">Featured Hit</div>
             <h3>{displayCardName}</h3>
+            <div className="featured-home-pulled">
+              Pulled on {formatShortDate(hit.stream_datetime)} by {hit.collector_name || 'Collector'}
+            </div>
+            <div className="featured-home-set">{breakInfo.setName}</div>
             <div className={`hit-badge badge-${hit.hit_tier}`}>
               {String(hit.hit_tier || '').toUpperCase()}
             </div>
@@ -6389,7 +6416,178 @@ function ArchiveFeaturedStyles() {
         }
 
       
-    `}</style>
+    
+        /* Homepage Featured Hit: all visible copy is white */
+        .archive-featured-exact .featured-home-copy,
+        .archive-featured-exact .featured-home-copy *,
+        .archive-featured-exact .featured-home-label,
+        .archive-featured-exact .featured-home-pulled,
+        .archive-featured-exact .featured-home-set,
+        .archive-featured-exact .featured-home-copy h3,
+        .archive-featured-exact .featured-home-copy .hit-badge {
+          color: #FFFFFF !important;
+          -webkit-text-fill-color: #FFFFFF !important;
+        }
+
+        /* Homepage-specific Featured Hit copy */
+        .archive-featured-exact .featured-home-label {
+          font-size: .76rem;
+          font-weight: 950;
+          letter-spacing: .13em;
+          text-transform: uppercase;
+          margin-bottom: 8px;
+          opacity: .9;
+        }
+
+        .archive-featured-exact .featured-home-pulled {
+          margin-top: 8px;
+          font-size: .88rem;
+          font-weight: 800;
+          line-height: 1.4;
+          opacity: .94;
+        }
+
+        .archive-featured-exact .featured-home-set {
+          margin-top: 9px;
+          margin-bottom: 9px;
+          font-size: .84rem;
+          font-weight: 950;
+          letter-spacing: .04em;
+          text-transform: uppercase;
+          opacity: .9;
+        }
+
+        /* ==========================================================
+           CLC FULL HIT CARD — exact Collector-page vintage paper /
+           old camera-projector treatment, scoped to homepage Featured.
+           ========================================================== */
+        .archive-featured-exact .hit-card.hit-clc,
+        .archive-featured-exact .showcase-hit-card.hit-clc {
+          position: relative;
+          isolation: isolate;
+          overflow: hidden;
+          background:
+            radial-gradient(ellipse at 50% 42%, rgba(247,232,188,.98) 0%, rgba(211,181,119,.98) 48%, rgba(126,88,43,.99) 100%) !important;
+          border: 1px solid rgba(119,82,39,.92) !important;
+          box-shadow:
+            inset 0 0 58px rgba(61,35,10,.38),
+            0 16px 38px rgba(61,40,18,.28) !important;
+          animation: clcFullProjectorFlicker 5.1s steps(1,end) infinite !important;
+        }
+
+        .archive-featured-exact .hit-card.hit-clc::before,
+        .archive-featured-exact .showcase-hit-card.hit-clc::before {
+          content: '' !important;
+          position: absolute !important;
+          inset: -12% !important;
+          z-index: 0 !important;
+          opacity: .30 !important;
+          display: block !important;
+          background:
+            radial-gradient(circle at 12% 18%, rgba(66,38,12,.32) 0 1px, transparent 1.7px),
+            radial-gradient(circle at 74% 63%, rgba(66,38,12,.24) 0 1px, transparent 1.8px),
+            repeating-radial-gradient(circle at 35% 42%, rgba(48,27,8,.22) 0 1px, transparent 1px 5px),
+            repeating-linear-gradient(7deg, rgba(72,42,15,.055) 0 1px, transparent 1px 6px) !important;
+          background-size: 43px 37px, 61px 53px, 8px 8px, auto !important;
+          animation: clcFullGrain .18s steps(2,end) infinite !important;
+          pointer-events: none;
+        }
+
+        .archive-featured-exact .hit-card.hit-clc::after,
+        .archive-featured-exact .showcase-hit-card.hit-clc::after {
+          content: '' !important;
+          position: absolute !important;
+          inset: 0 !important;
+          left: 0 !important;
+          top: 0 !important;
+          width: auto !important;
+          height: auto !important;
+          transform: none !important;
+          display: block !important;
+          z-index: 1 !important;
+          opacity: 1 !important;
+          background:
+            linear-gradient(90deg,
+              transparent 0 18%,
+              rgba(255,248,215,.13) 18.15% 18.3%,
+              transparent 18.45% 72%,
+              rgba(61,34,10,.13) 72.1% 72.25%,
+              transparent 72.4% 100%),
+            radial-gradient(ellipse at center, transparent 39%, rgba(61,35,11,.12) 67%, rgba(39,21,7,.52) 100%) !important;
+          animation: clcFullExposure 3.9s ease-in-out infinite !important;
+          pointer-events: none;
+        }
+
+        .archive-featured-exact .hit-card.hit-clc .hit-layout,
+        .archive-featured-exact .hit-card.hit-clc .hit-content,
+        .archive-featured-exact .showcase-hit-card.hit-clc .hit-layout,
+        .archive-featured-exact .showcase-hit-card.hit-clc .hit-content {
+          position: relative;
+          z-index: 4;
+        }
+
+        .archive-featured-exact .hit-card.hit-clc .hit-break,
+        .archive-featured-exact .hit-card.hit-clc h3,
+        .archive-featured-exact .showcase-hit-card.hit-clc .hit-break,
+        .archive-featured-exact .showcase-hit-card.hit-clc h3 {
+          color: #FFFFFF !important;
+          -webkit-text-fill-color: #FFFFFF !important;
+          text-shadow:
+            0 2px 2px rgba(48,27,8,.72),
+            0 4px 14px rgba(48,27,8,.42) !important;
+        }
+
+        .archive-featured-exact .hit-card.hit-clc .break-number,
+        .archive-featured-exact .showcase-hit-card.hit-clc .break-number {
+          color: #FFFFFF !important;
+          -webkit-text-fill-color: #FFFFFF !important;
+          background: rgba(67,40,15,.36) !important;
+          border-color: rgba(255,245,208,.52) !important;
+          text-shadow: 0 2px 6px rgba(43,24,7,.72) !important;
+        }
+
+        .archive-featured-exact .hit-card.hit-clc .badge-clc,
+        .archive-featured-exact .showcase-hit-card.hit-clc .badge-clc {
+          color: #FFFFFF !important;
+          -webkit-text-fill-color: #FFFFFF !important;
+          background: rgba(67,40,15,.54) !important;
+          border: 1px solid rgba(255,231,166,.82) !important;
+          box-shadow:
+            inset 0 0 12px rgba(255,224,145,.12),
+            0 0 15px rgba(72,43,15,.20) !important;
+          text-shadow: 0 2px 6px rgba(43,24,7,.72) !important;
+        }
+
+        /* Homepage had an older extra CLC overlay. Hide it so the card is
+           visually identical to the Collector-page implementation. */
+        .archive-featured-exact .hit-card.hit-clc > .clc-vintage-film {
+          display: none !important;
+        }
+
+        @keyframes clcFullProjectorFlicker {
+          0%,14%,16%,37%,39%,66%,68%,90%,92%,100% { filter: sepia(.24) contrast(1.04) brightness(1); }
+          15% { filter: sepia(.42) contrast(1.10) brightness(.91); }
+          38% { filter: sepia(.30) contrast(1.07) brightness(1.06); }
+          67% { filter: sepia(.46) contrast(1.11) brightness(.90); }
+          91% { filter: sepia(.34) contrast(1.07) brightness(1.04); }
+        }
+
+        @keyframes clcFullGrain {
+          0% { transform: translate(0,0); }
+          25% { transform: translate(-2px,1px); }
+          50% { transform: translate(1px,-2px); }
+          75% { transform: translate(2px,2px); }
+          100% { transform: translate(-1px,1px); }
+        }
+
+        @keyframes clcFullExposure {
+          0%,100% { opacity:.88; }
+          45% { opacity:1; }
+          47% { opacity:.80; }
+          50% { opacity:.96; }
+        }
+
+`}</style>
   )
 }
 
@@ -6429,7 +6627,46 @@ export default function HomePage() {
   const [featuredIndex, setFeaturedIndex] = useState(0)
   const [recentHits, setRecentHits] = useState<any[]>([])
   const [hitImages, setHitImages] = useState<Record<string, string>>({})
+  const recentViewportRef = useRef<HTMLDivElement | null>(null)
+  const recentTrackRef = useRef<HTMLDivElement | null>(null)
+  const recentDragRef = useRef({ dragging: false, startX: 0, startScrollLeft: 0 })
+  const recentLoopJumpRef = useRef(false)
+  const [recentDragging, setRecentDragging] = useState(false)
   const router = useRouter()
+
+  function startRecentDrag(e: React.PointerEvent<HTMLDivElement>) {
+    if (e.pointerType !== 'mouse' || e.button !== 0) return
+    const viewport = recentViewportRef.current
+    if (!viewport) return
+
+    recentDragRef.current = {
+      dragging: true,
+      startX: e.clientX,
+      startScrollLeft: viewport.scrollLeft,
+    }
+    setRecentDragging(true)
+    viewport.setPointerCapture(e.pointerId)
+  }
+
+  function moveRecentDrag(e: React.PointerEvent<HTMLDivElement>) {
+    if (!recentDragRef.current.dragging) return
+    const viewport = recentViewportRef.current
+    if (!viewport) return
+
+    const distance = e.clientX - recentDragRef.current.startX
+    viewport.scrollLeft = recentDragRef.current.startScrollLeft - distance
+  }
+
+  function endRecentDrag(e: React.PointerEvent<HTMLDivElement>) {
+    if (!recentDragRef.current.dragging) return
+    recentDragRef.current.dragging = false
+    setRecentDragging(false)
+
+    const viewport = recentViewportRef.current
+    if (viewport?.hasPointerCapture(e.pointerId)) {
+      viewport.releasePointerCapture(e.pointerId)
+    }
+  }
 
   function searchVault() {
     if (!username.trim()) return
@@ -6444,7 +6681,7 @@ export default function HomePage() {
         .eq('featured_hit', true)
         .eq('is_hit', true)
         .order('revealed_at', { ascending: false })
-        .limit(3),
+        .limit(5),
       supabase
         .from('entries')
         .select('*')
@@ -6488,8 +6725,35 @@ export default function HomePage() {
       .map(hydrate)
       .filter((hit: any) => !isGenericGroupedHit(hit))
 
+    const sortedRecentHits = [...hydratedRecent].sort((a: any, b: any) => {
+      const aDate = a.stream_datetime ? new Date(a.stream_datetime) : null
+      const bDate = b.stream_datetime ? new Date(b.stream_datetime) : null
+
+      const aDay = aDate && !Number.isNaN(aDate.getTime())
+        ? new Date(aDate.getFullYear(), aDate.getMonth(), aDate.getDate()).getTime()
+        : 0
+      const bDay = bDate && !Number.isNaN(bDate.getTime())
+        ? new Date(bDate.getFullYear(), bDate.getMonth(), bDate.getDate()).getTime()
+        : 0
+
+      // Newest calendar date first.
+      if (bDay !== aDay) return bDay - aDay
+
+      const getBreakNumber = (name: unknown) => {
+        const matches = [...String(name || '').matchAll(/\bBreak\s*(\d+)\b/gi)]
+        return matches.length ? Number(matches[matches.length - 1][1]) : 0
+      }
+
+      // On the same date, highest break number first.
+      const breakDiff = getBreakNumber(b.break_name) - getBreakNumber(a.break_name)
+      if (breakDiff !== 0) return breakDiff
+
+      // Keep the original database order for cards within the same break.
+      return hydratedRecent.indexOf(a) - hydratedRecent.indexOf(b)
+    })
+
     setFeaturedHits(hydratedFeatured)
-    setRecentHits(hydratedRecent)
+    setRecentHits(sortedRecentHits)
     setFeaturedIndex(0)
 
     const allHydrated = [...hydratedFeatured, ...hydratedRecent]
@@ -6546,7 +6810,62 @@ export default function HomePage() {
   const featuredImage = imageForHit(featuredHit)
   const carouselRecentHits = recentHits.filter((hit: any) => !isGenericGroupedHit(hit))
   const recentLoop =
-    carouselRecentHits.length > 0 ? [...carouselRecentHits, ...carouselRecentHits] : []
+    carouselRecentHits.length > 0
+      ? [...carouselRecentHits, ...carouselRecentHits, ...carouselRecentHits]
+      : []
+
+  function keepRecentCarouselInfinite() {
+    const viewport = recentViewportRef.current
+    const track = recentTrackRef.current
+    if (!viewport || !track || carouselRecentHits.length === 0) return
+
+    const oneLoopWidth = track.scrollWidth / 3
+    if (!oneLoopWidth) return
+
+    // Work from the middle copy. Crossing either boundary silently moves
+    // to the identical position in the neighbouring copy.
+    if (viewport.scrollLeft < oneLoopWidth * 0.5) {
+      recentLoopJumpRef.current = true
+      viewport.scrollLeft += oneLoopWidth
+      recentLoopJumpRef.current = false
+    } else if (viewport.scrollLeft > oneLoopWidth * 1.5) {
+      recentLoopJumpRef.current = true
+      viewport.scrollLeft -= oneLoopWidth
+      recentLoopJumpRef.current = false
+    }
+  }
+
+  useEffect(() => {
+    const viewport = recentViewportRef.current
+    const track = recentTrackRef.current
+    if (!viewport || !track || carouselRecentHits.length === 0) return
+
+    const placeInMiddle = () => {
+      const oneLoopWidth = track.scrollWidth / 3
+      if (oneLoopWidth) viewport.scrollLeft = oneLoopWidth
+    }
+
+    const frame = window.requestAnimationFrame(placeInMiddle)
+    return () => window.cancelAnimationFrame(frame)
+  }, [carouselRecentHits.length])
+
+  useEffect(() => {
+    // Use whole-pixel scroll steps instead of fractional requestAnimationFrame
+    // movement. This is much more reliable across browsers for overflow scrollers.
+    const autoplay = window.setInterval(() => {
+      const viewport = recentViewportRef.current
+      const track = recentTrackRef.current
+      if (!viewport || !track || carouselRecentHits.length === 0) return
+
+      // Only pause while the user is actively click-dragging.
+      if (recentDragRef.current.dragging) return
+
+      viewport.scrollLeft += 1
+      keepRecentCarouselInfinite()
+    }, 24)
+
+    return () => window.clearInterval(autoplay)
+  }, [carouselRecentHits.length])
 
   function showPreviousFeatured() {
     if (featuredHits.length <= 1) return
@@ -6733,10 +7052,15 @@ export default function HomePage() {
         .recent-heading { display:flex; align-items:end; justify-content:space-between; gap:12px; margin:0 2px 9px; }
         .recent-title { font-size:.9rem; font-weight:950; letter-spacing:1.4px; text-transform:uppercase; }
         .recent-subtitle { font-size:.68rem; opacity:.62; }
-        .recent-viewport { overflow:hidden; width:100vw; margin-left:calc(50% - 50vw); padding:5px 0 10px; mask-image:linear-gradient(90deg,transparent,#000 4%,#000 96%,transparent); -webkit-mask-image:linear-gradient(90deg,transparent,#000 4%,#000 96%,transparent); }
-        .recent-track { display:flex; width:max-content; gap:12px; padding:0 12px; animation:recentScroll 180s linear infinite; }
-        .recent-track:hover { animation-play-state:paused; }
-        .recent-card { width:142px; flex:0 0 142px; border:1px solid rgba(255,255,255,.14); border-radius:16px; background:rgba(255,255,255,.065); padding:10px; box-shadow:0 10px 28px rgba(0,0,0,.22); overflow:hidden; }
+        .recent-viewport { overflow-x:auto; overflow-y:hidden; width:100vw; margin-left:calc(50% - 50vw); padding:5px 0 10px; mask-image:linear-gradient(90deg,transparent,#000 4%,#000 96%,transparent); -webkit-mask-image:linear-gradient(90deg,transparent,#000 4%,#000 96%,transparent); -webkit-overflow-scrolling:touch; touch-action:pan-x; scrollbar-width:none; overscroll-behavior-x:contain; }
+        .recent-viewport::-webkit-scrollbar { display:none; }
+        .recent-viewport { cursor: grab; }
+        .recent-viewport.is-dragging { cursor: grabbing; user-select:none; -webkit-user-select:none; }
+        .recent-viewport.is-dragging .recent-track { pointer-events:none; }
+        .recent-track { display:flex; width:max-content; gap:12px; padding:0 12px; }
+        .recent-track:hover { animation-play-state:running; }
+        .recent-card { width:142px; flex:0 0 142px; border:1px solid rgba(255,255,255,.14); border-radius:16px; background:rgba(255,255,255,.065); padding:10px; box-shadow:0 10px 28px rgba(0,0,0,.22); overflow:hidden; user-select:none; -webkit-user-select:none; }
+        .recent-card img { -webkit-user-drag:none; user-select:none; pointer-events:none; }
         .recent-image-wrap { height:155px; display:flex; align-items:center; justify-content:center; margin-bottom:8px; position:relative; }
         .recent-image { max-width:100%; max-height:155px; width:auto; height:auto; display:block; filter:drop-shadow(0 8px 10px rgba(0,0,0,.4)); }
         .recent-image-tier {
@@ -6759,7 +7083,6 @@ export default function HomePage() {
         .recent-owner { margin-top:4px; font-size:.64rem; font-weight:850; color:#d8b4fe; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
         .recent-meta { margin-top:4px; font-size:.59rem; line-height:1.3; opacity:.82; }
         .recent-set-name { font-weight:950; color:#10152D; letter-spacing:.25px; }
-        @keyframes recentScroll { from { transform:translateX(0); } to { transform:translateX(calc(-50% - 6px)); } }
 
         .search-card {
           border: 1px solid rgba(255,255,255,.15);
@@ -8627,8 +8950,21 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div className="recent-viewport">
-              <div className="recent-track">
+            <div
+              ref={recentViewportRef}
+              className={`recent-viewport ${recentDragging ? 'is-dragging' : ''}`}
+              onPointerDown={startRecentDrag}
+              onPointerMove={moveRecentDrag}
+              onPointerUp={endRecentDrag}
+              onPointerCancel={endRecentDrag}
+              onPointerLeave={(e) => {
+                if (recentDragRef.current.dragging) endRecentDrag(e)
+              }}
+              onScroll={() => {
+                if (!recentLoopJumpRef.current) keepRecentCarouselInfinite()
+              }}
+            >
+              <div ref={recentTrackRef} className="recent-track">
                 {recentLoop.map((hit, index) => {
                   const info = getBreakInfo(hit.break_name)
                   const imageUrl = imageForHit(hit)

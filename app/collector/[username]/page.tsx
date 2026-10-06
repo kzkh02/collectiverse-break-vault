@@ -61,6 +61,30 @@ function formatDate(value: string | null) {
   })
 }
 
+const CANONICAL_SET_NAMES = [
+  '30th Celebration',
+  'English 151',
+  'Ascended Heroes',
+  'Chaos Rising',
+  'Pitch Black',
+  'Crown Zenith',
+] as const
+
+function canonicalSetName(name: string | null) {
+  const cleaned = String(name || '')
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/Break\s+\d+/i, '')
+    .trim()
+
+  const lower = cleaned.toLowerCase()
+  const match = [...CANONICAL_SET_NAMES]
+    .sort((a, b) => b.length - a.length)
+    .find((setName) => lower.includes(setName.toLowerCase()))
+
+  return match || cleaned
+}
+
 function getBreakInfo(name: string | null) {
   const cleaned = String(name || '')
     .replace(/[^\w\s]/g, ' ')
@@ -68,10 +92,9 @@ function getBreakInfo(name: string | null) {
     .trim()
 
   const breakMatch = cleaned.match(/Break\s+(\d+)/i)
-  const setName = cleaned.replace(/Break\s+\d+/i, '').trim()
 
   return {
-    setName,
+    setName: canonicalSetName(cleaned),
     breakNumber: breakMatch?.[1] || '',
   }
 }

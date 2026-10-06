@@ -22,12 +22,32 @@ type CardVariant = {
   cardName: string
 }
 
-function getSetName(name: string | null) {
-  return String(name || '')
+const CANONICAL_SET_NAMES = [
+  '30th Celebration',
+  'English 151',
+  'Ascended Heroes',
+  'Chaos Rising',
+  'Pitch Black',
+  'Crown Zenith',
+] as const
+
+function canonicalSetName(name: string | null) {
+  const cleaned = String(name || '')
     .replace(/[^\w\s]/g, ' ')
     .replace(/\s+/g, ' ')
     .replace(/Break\s+\d+/i, '')
     .trim()
+
+  const lower = cleaned.toLowerCase()
+  const match = [...CANONICAL_SET_NAMES]
+    .sort((a, b) => b.length - a.length)
+    .find((setName) => lower.includes(setName.toLowerCase()))
+
+  return match || cleaned
+}
+
+function getSetName(name: string | null) {
+  return canonicalSetName(name)
 }
 
 function normalise(value: string) {
@@ -218,16 +238,16 @@ function parseSpotVariants(spotName: string): CardVariant[] {
     ]
   }
 
-  // 30th Anniversary: the Meowth purchased spot contains three separate IR cards.
-  // Give each one its own canonical image entry.
+  // 30th Celebration: Galarian/Alolan/Meowth is one purchased spot,
+  // but it contains three separate physical IR cards/images.
   if (
-    /meowth/i.test(displayClean) &&
-    /alolan\s+meowth/i.test(displayClean)
+    (/galarian/i.test(displayClean) && /alolan/i.test(displayClean) && /meowth/i.test(displayClean)) ||
+    (/meowth/i.test(displayClean) && /alolan\s+meowth/i.test(displayClean))
   ) {
     return [
-      { spotName: clean, baseName: 'Meowth', variant: 'IR', cardName: 'Meowth IR' },
-      { spotName: clean, baseName: 'Alolan Meowth', variant: 'IR', cardName: 'Alolan Meowth IR' },
       { spotName: clean, baseName: 'Galarian Meowth', variant: 'IR', cardName: 'Galarian Meowth IR' },
+      { spotName: clean, baseName: 'Alolan Meowth', variant: 'IR', cardName: 'Alolan Meowth IR' },
+      { spotName: clean, baseName: 'Meowth', variant: 'IR', cardName: 'Meowth IR' },
     ]
   }
 

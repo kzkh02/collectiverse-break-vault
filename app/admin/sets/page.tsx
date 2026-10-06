@@ -17,12 +17,28 @@ type SetSummary = {
   images: Set<string>
 }
 
+const CANONICAL_SET_NAMES = [
+  '30th Celebration',
+  'English 151',
+  'Ascended Heroes',
+  'Chaos Rising',
+  'Pitch Black',
+  'Crown Zenith',
+] as const
+
 function getSetName(name: string | null) {
-  return String(name || '')
+  const cleaned = String(name || '')
     .replace(/[^\w\s]/g, ' ')
     .replace(/\s+/g, ' ')
     .replace(/Break\s+\d+/i, '')
     .trim()
+
+  const lower = cleaned.toLowerCase()
+  const canonical = [...CANONICAL_SET_NAMES]
+    .sort((a, b) => b.length - a.length)
+    .find((setName) => lower.includes(setName.toLowerCase()))
+
+  return canonical || cleaned
 }
 
 function normalise(value: string) {
@@ -225,7 +241,23 @@ export default function SetLibraryPage() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    return !q ? sets : sets.filter((set) => set.name.toLowerCase().includes(q))
+
+    // Never show legacy/custom break-name variants as separate Set Library cards.
+    // They still exist as breaks; they simply belong to their canonical set card.
+    const cleanSets = sets.filter((set) => {
+      const name = normalise(set.name)
+
+      if (name.includes('30th celebration') && name !== '30th celebration') return false
+      if (name.includes('english 151') && name !== 'english 151') return false
+      if (name.includes('ascended heroes') && name !== 'ascended heroes') return false
+      if (name.includes('chaos rising') && name !== 'chaos rising') return false
+      if (name.includes('pitch black') && name !== 'pitch black') return false
+      if (name.includes('crown zenith') && name !== 'crown zenith') return false
+
+      return true
+    })
+
+    return !q ? cleanSets : cleanSets.filter((set) => set.name.toLowerCase().includes(q))
   }, [sets, search])
 
   return (

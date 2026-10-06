@@ -186,13 +186,22 @@ function choicesForAscendedSpot(spotName: string): string[] {
     return ['Darkrai & Cresselia Top', 'Darkrai & Cresselia Bottom']
   }
 
-  // 30th Anniversary: the Meowth purchased spot has three separate IR hits/images.
+  // 30th Celebration: this is one purchased spot with three separate IR hits.
+  // Supports both the current "Galarian/Alolan/Meowth IR" wording and legacy Meowth wording.
   if (
+    key === 'galarian/alolan/meowth ir' ||
+    key === 'galarian/alolan/meowth (ir)' ||
+    key === 'galarian meowth/alolan meowth/meowth ir' ||
     key === 'meowth ir & alolan meowth ir' ||
     key === 'meowth & alolan meowth' ||
+    (
+      key.includes('galarian') &&
+      key.includes('alolan') &&
+      key.includes('meowth')
+    ) ||
     (key.includes('meowth') && key.includes('alolan meowth'))
   ) {
-    return ['Meowth', 'Alolan Meowth', 'Galarian Meowth']
+    return ['Galarian Meowth', 'Alolan Meowth', 'Meowth']
   }
 
   // 30th Anniversary: N / Misty is one purchased spot with two separate CLC hits.
@@ -234,7 +243,8 @@ export default function BreakPage() {
 
   const totalSpots = entries.length
   const hitsMarked = entries.filter((entry) => entry.is_hit).length
-  const featuredHit = entries.find((entry) => entry.featured_hit)
+  const featuredHits = entries.filter((entry) => entry.featured_hit)
+  const featuredCount = featuredHits.length
   const breakStatus = breakData?.status || 'open'
 
   const collectorSummary = useMemo(() => {
@@ -458,19 +468,159 @@ export default function BreakPage() {
     setMessage('Saved')
   }
 
+  async function addExtraHit(entry: EntryRow) {
+    if (!entry.is_hit || !entry.hit_tier) {
+      setMessage('Mark the original card as a hit first.')
+      return
+    }
+
+    const choices = choicesForAscendedSpot(entry.spot_name)
+    const chosenNames = (selectedHitNames[entry.id] || []).filter(Boolean)
+
+    if (choices.length > 0 && chosenNames.length === 0) {
+      setMessage('Choose the actual card pulled before adding an extra hit.')
+      return
+    }
+
+    const existingExtraCount = entries.filter((item) =>
+      item.spot_name.startsWith(`${cleanSpotLabel(entry.spot_name)} · Extra Hit `)
+    ).length
+
+    const extraNumber = existingExtraCount + 1
+    const extraSpotName = `${cleanSpotLabel(entry.spot_name)} · Extra Hit ${extraNumber}`
+
+    const isPikachuSirExSpot =
+      spotChoiceKey(entry.spot_name) === 'pikachu (sir, ex)' ||
+      spotChoiceKey(entry.spot_name) === 'pikachu (sir,ex)'
+
+    const correctedTier: TierId =
+      spotChoiceKey(entry.spot_name) === 'umbreon (ir)' ||
+      spotChoiceKey(entry.spot_name) === 'espeon (ir)'
+        ? 'ex'
+        : entry.hit_tier
+
+    const hitName =
+      isPikachuSirExSpot && correctedTier === 'ex'
+        ? 'Pikachu EX'
+        : choices.length > 0
+        ? chosenNames
+            .map((name) => {
+              const cleanName = String(name).replace(/\s+(SIR|GOLD|MAR|IR|SR|CLC)$/i, '').trim()
+              const isAllOtherEx = spotChoiceKey(entry.spot_name).startsWith('all other ex')
+              if (isAllOtherEx || !correctedTier) return cleanName
+              return `${cleanName} (${tierLabel(correctedTier)})`
+            })
+            .join(' + ')
+        : entry.hit_name || entry.spot_name
+
+    setSavingEntryId(entry.id)
+
+    const { data: inserted, error } = await supabase
+      .from('entries')
+      .insert({
+        break_id: entry.break_id,
+        collector_id: entry.collector_id,
+        spot_name: extraSpotName,
+        is_hit: true,
+        hit_name: hitName,
+        hit_tier: correctedTier,
+        revealed_at: new Date().toISOString(),
+        featured_hit: false,
+      })
+      .select('*')
+      .single()
+
+    setSavingEntryId(null)
+
+    if (error || !inserted) {
+      setMessage(`Extra hit error: ${error?.message || 'No entry returned'}`)
+      return
+    }
+
+    const newEntry = {
+      ...inserted,
+      collector_name: entry.collector_name || 'Unknown',
+    } as EntryRow
+
+    setEntries((current) => [...current, newEntry])
+
+    if (choices.length > 0) {
+      setSelectedHitNames((current) => ({
+        ...current,
+        [newEntry.id]: [...chosenNames],
+      }))
+    }
+
+    setMessage(`Extra hit added for ${cleanSpotLabel(entry.spot_name)}`)
+  }
+
   async function applyBulkTier(entry: EntryRow) {
     if (!bulkMode) return
     await updateHit(entry.id, entry.spot_name, bulkTier)
   }
 
   async function featureHit(entryId: string) {
-    const confirmed = window.confirm('Set this as the homepage featured hit?')
+    const entry = entries.find((item) => item.id === entryId)
+    if (!entry?.is_hit) {
+      setMessage('Only marked hits can be featured.')
+      return
+    }
+
+    if (entry.featured_hit) {
+      const { error } = await supabase
+        .from('entries')
+        .update({ featured_hit: false })
+        .eq('id', entryId)
+
+      if (error) {
+        setMessage(error.message)
+        return
+      }
+
+      setEntries((current) =>
+        current.map((item) =>
+          item.id === entryId ? { ...item, featured_hit: false } : item
+        )
+      )
+      setMessage('Featured hit removed from the homepage')
+      return
+    }
+
+    const { data: currentFeatured, error: featuredError } = await supabase
+      .from('entries')
+      .select('id, revealed_at')
+      .eq('featured_hit', true)
+      .eq('is_hit', true)
+      .order('revealed_at', { ascending: true })
+
+    if (featuredError) {
+      setMessage(featuredError.message)
+      return
+    }
+
+    const featuredNow = currentFeatured || []
+    const confirmed = window.confirm(
+      featuredNow.length >= 5
+        ? 'The homepage already has 5 featured hits. Add this one and automatically remove the oldest featured hit?'
+        : `Add this to the homepage featured carousel? ${featuredNow.length + 1}/5 slots will be used.`
+    )
     if (!confirmed) return
 
-    await supabase
-      .from('entries')
-      .update({ featured_hit: false })
-      .eq('featured_hit', true)
+    let removedEntryId: string | null = null
+
+    if (featuredNow.length >= 5 && featuredNow[0]?.id) {
+      removedEntryId = String(featuredNow[0].id)
+
+      const { error: removeError } = await supabase
+        .from('entries')
+        .update({ featured_hit: false })
+        .eq('id', removedEntryId)
+
+      if (removeError) {
+        setMessage(removeError.message)
+        return
+      }
+    }
 
     const { error } = await supabase
       .from('entries')
@@ -478,22 +628,33 @@ export default function BreakPage() {
       .eq('id', entryId)
 
     if (error) {
+      if (removedEntryId) {
+        await supabase
+          .from('entries')
+          .update({ featured_hit: true })
+          .eq('id', removedEntryId)
+      }
       setMessage(error.message)
       return
     }
 
     setEntries((current) =>
-      current.map((entry) => ({
-        ...entry,
-        featured_hit: entry.id === entryId,
-      }))
+      current.map((item) => {
+        if (item.id === entryId) return { ...item, featured_hit: true }
+        if (removedEntryId && item.id === removedEntryId) return { ...item, featured_hit: false }
+        return item
+      })
     )
 
-    setMessage('Featured hit updated')
+    setMessage(
+      removedEntryId
+        ? 'Hit added and the oldest featured hit was removed automatically'
+        : 'Hit added to the homepage featured carousel'
+    )
   }
 
   async function clearFeaturedHit() {
-    const confirmed = window.confirm('Clear the current homepage featured hit?')
+    const confirmed = window.confirm('Clear all homepage featured hits?')
     if (!confirmed) return
 
     const { error } = await supabase
@@ -507,7 +668,7 @@ export default function BreakPage() {
     }
 
     setEntries((current) => current.map((entry) => ({ ...entry, featured_hit: false })))
-    setMessage('Featured hit cleared')
+    setMessage('All featured hits cleared')
   }
 
   async function completeBreak() {
@@ -982,23 +1143,19 @@ export default function BreakPage() {
 
         <section className="panel featured-panel">
           <div>
-            <div className="panel-title">⭐ Current Featured Hit</div>
-            {featuredHit ? (
-              <>
-                <div className="featured-name">{featuredHit.spot_name}</div>
-                <div className="featured-sub">
-                  {featuredHit.collector_name} · {tierEmoji(featuredHit.hit_tier)}{' '}
-                  {tierLabel(featuredHit.hit_tier)}
-                </div>
-              </>
+            <div className="panel-title">⭐ Homepage Featured Hits ({featuredCount}/5)</div>
+            {featuredHits.length > 0 ? (
+              <div className="featured-sub">
+                {featuredHits.map((hit) => hit.spot_name).join(' · ')}
+              </div>
             ) : (
-              <div className="featured-sub">No featured hit selected.</div>
+              <div className="featured-sub">No featured hits selected.</div>
             )}
           </div>
 
-          {featuredHit && (
+          {featuredHits.length > 0 && (
             <button className="admin-button" onClick={clearFeaturedHit}>
-              Clear Featured
+              Clear All Featured
             </button>
           )}
         </section>
@@ -1161,9 +1318,15 @@ export default function BreakPage() {
                 )}
 
                 {entry.is_hit && (
-                  <button className="admin-button gold" onClick={() => featureHit(entry.id)}>
-                    ⭐ Feature
-                  </button>
+                  <>
+                    <button className="admin-button" onClick={() => addExtraHit(entry)}>
+                      ＋ Extra Hit
+                    </button>
+
+                    <button className="admin-button gold" onClick={() => featureHit(entry.id)}>
+                      ⭐ Feature
+                    </button>
+                  </>
                 )}
               </div>
             </div>

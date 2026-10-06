@@ -5,7 +5,7 @@ import Link from 'next/link'
 import OwnerGuard from '../owner-guard'
 import { supabase } from '../../../lib/supabase'
 
-type Tab = 'overview' | 'calendar' | 'breaks' | 'singles'
+type Tab = 'overview' | 'calendar' | 'breaks'
 
 type BreakStream = {
   id: string
@@ -75,7 +75,6 @@ type SinglesSummary = {
 }
 
 const PAYRUN_ANCHOR = '2026-07-31'
-const OWNER_EMAIL = 'collectiversetcg@gmail.com'
 
 function num(value: unknown) {
   return Number(value || 0)
@@ -137,24 +136,7 @@ function fullDate(value: string) {
   })
 }
 
-function monthLabel(year: number, month: number) {
-  return new Date(year, month, 1).toLocaleDateString('en-GB', {
-    month: 'long',
-    year: 'numeric',
-  })
-}
 
-function getCalendarDays(year: number, month: number): CalendarDay[] {
-  const first = new Date(year, month, 1)
-  const start = new Date(first)
-  start.setDate(first.getDate() - first.getDay())
-
-  return Array.from({ length: 42 }, (_, index) => {
-    const date = new Date(start)
-    date.setDate(start.getDate() + index)
-    return { key: dateKey(date), inMonth: date.getMonth() === month }
-  })
-}
 
 function getPayrunForDate(value: string) {
   const anchor = parseDate(PAYRUN_ANCHOR).getTime()
@@ -215,8 +197,6 @@ export default function OwnerPerformancePage() {
   const [sealed, setSealed] = useState<SealedBatch[]>([])
   const [packBatches, setPackBatches] = useState<PackBatch[]>([])
 
-  const [selectedYear, setSelectedYear] = useState(now.getFullYear())
-  const [selectedMonth, setSelectedMonth] = useState(now.getMonth())
   const [selectedDate, setSelectedDate] = useState(todayKey())
   const [payrunOffset, setPayrunOffset] = useState(0)
 
@@ -346,9 +326,6 @@ export default function OwnerPerformancePage() {
   const currentPayrunSummary = payrunSummary(selectedPayrun)
   const nextPayrunSummary = payrunSummary(nextPayrun)
 
-  const currentPayrunStreamCount =
-    currentPayrunSummary.breaks.streams + currentPayrunSummary.singles.transactions
-
 
 
   const collectionValue = poolLots.reduce(
@@ -371,10 +348,6 @@ export default function OwnerPerformancePage() {
   const inventoryValue =
     collectionValue + trackedValue + sealedValue + giveawayValue + breakStockValue
 
-  const calendarDays = useMemo(
-    () => getCalendarDays(selectedYear, selectedMonth),
-    [selectedYear, selectedMonth]
-  )
 
   const dayBreaks = summariseBreaks(breaks.filter((row) => row.stream_date === selectedDate))
   const daySingles = summariseSingles(singles.filter((row) => row.sold_date === selectedDate))
@@ -412,25 +385,33 @@ export default function OwnerPerformancePage() {
     () => [...breaks].sort((a, b) => num(b.profit) - num(a.profit))[0],
     [breaks]
   )
-  const bestSinglesSale = useMemo(
-    () => [...singles].sort((a, b) => num(b.profit) - num(a.profit))[0],
-    [singles]
-  )
 
-  const platformRows = useMemo(
-    () =>
-      ['streaming', 'ebay', 'website'].map((platform) => {
-        const rows = singles.filter((row) => row.platform === platform)
-        return { platform, ...summariseSingles(rows) }
-      }),
-    [singles, sealed]
-  )
 
   const payrunProfitChange = previousPayrunSummary.profit
     ? ((currentPayrunSummary.profit - previousPayrunSummary.profit) /
         Math.abs(previousPayrunSummary.profit)) *
       100
     : 0
+
+
+  const payrunDays = useMemo(
+    () =>
+      Array.from({ length: 14 }, (_, index) => {
+        const key = addDays(selectedPayrun.start, index)
+        const breakSummary = summariseBreaks(breaks.filter((row) => row.stream_date === key))
+        const singlesSummary = summariseSingles(singles.filter((row) => row.sold_date === key))
+        return {
+          key,
+          breakSummary,
+          singlesSummary,
+          profit: breakSummary.profit + singlesSummary.profit,
+        }
+      }),
+    [selectedPayrun.start, breaks, singles, packsOnlyByStream, sealed]
+  )
+
+  const payrunWeekOne = payrunDays.slice(0, 7)
+  const payrunWeekTwo = payrunDays.slice(7, 14)
 
   function StatCard({
     label,
@@ -449,37 +430,6 @@ export default function OwnerPerformancePage() {
         <div className={`stat-value ${positive ? 'positive' : ''}`}>{value}</div>
         {sub && <div className="stat-sub">{sub}</div>}
       </div>
-    )
-  }
-
-  function PayrunCard({
-    title,
-    data,
-    active,
-    onClick,
-  }: {
-    title: string
-    data: ReturnType<typeof payrunSummary>
-    active?: boolean
-    onClick: () => void
-  }) {
-    return (
-      <button className={`payrun-card ${active ? 'active' : ''}`} onClick={onClick}>
-        <div className="payrun-card-head">
-          <div>
-            <div className="payrun-name">{title}</div>
-            <div className="payrun-dates">
-              {shortDate(data.period.start)} → {shortDate(data.period.end)}
-            </div>
-          </div>
-          {active && <span className="current-badge">Selected</span>}
-        </div>
-        <div className="payrun-numbers">
-          <div><span>Sales</span><strong>{money(data.gross)}</strong></div>
-          <div><span>Net Sales</span><strong>{money(data.net)}</strong></div>
-          <div><span>Profit</span><strong className="positive">{money(data.profit)}</strong></div>
-        </div>
-      </button>
     )
   }
 
@@ -577,8 +527,8 @@ export default function OwnerPerformancePage() {
           .panel {
             border: 1px solid rgba(255,255,255,.14);
             background: linear-gradient(135deg, rgba(255,255,255,.075), rgba(255,255,255,.045));
-            border-radius: 22px;
-            padding: 20px;
+            border-radius: 15px;
+            padding: 14px;
             margin-bottom: 16px;
             box-shadow: 0 18px 50px rgba(0,0,0,.24);
           }
@@ -591,7 +541,7 @@ export default function OwnerPerformancePage() {
 
           .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
             gap: 12px;
             margin-top: 15px;
           }
@@ -718,6 +668,37 @@ export default function OwnerPerformancePage() {
             margin-top: 14px;
           }
 
+          .payrun-calendar {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 16px;
+          }
+
+          .payrun-week {
+            display: grid;
+            grid-template-columns: repeat(7, minmax(0, 1fr));
+            gap: 8px;
+          }
+
+          .calendar-nav {
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            gap: 12px;
+            align-items: center;
+          }
+
+          .calendar-period {
+            text-align: center;
+          }
+
+          .calendar-summary {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 10px;
+            margin-top: 14px;
+          }
+
           .weekday {
             font-size: .7rem;
             color: rgba(255,255,255,.55);
@@ -810,8 +791,10 @@ export default function OwnerPerformancePage() {
           @media (max-width: 900px) {
             .page { padding: 14px; }
             .top, .section-head, .calendar-head { align-items: flex-start; flex-direction: column; }
-            .grid-2, .payrun-grid { grid-template-columns: 1fr; }
+            .grid-2, .payrun-grid, .calendar-summary { grid-template-columns: 1fr; }
             .calendar-grid { grid-template-columns: 1fr; }
+            .payrun-week { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .calendar-nav { grid-template-columns: auto 1fr auto; }
             .weekday { display: none; }
             .day { min-height: auto; }
             .table-row, .table-row.compact { grid-template-columns: 1fr; }
@@ -822,9 +805,9 @@ export default function OwnerPerformancePage() {
         <div className="wrap">
           <header className="top">
             <div>
-              <div className="eyebrow">Owner only · {OWNER_EMAIL}</div>
+              <div className="eyebrow">Owner Dashboard</div>
               <h1>Business Performance</h1>
-              <div className="sub">One private dashboard for Breaks and Singles.</div>
+              <div className="sub">The numbers that matter across Breaks and Singles.</div>
             </div>
 
             <div className="actions">
@@ -839,7 +822,6 @@ export default function OwnerPerformancePage() {
             <button className={`tab ${tab === 'overview' ? 'active' : ''}`} onClick={() => setTab('overview')}>Dashboard</button>
             <button className={`tab ${tab === 'calendar' ? 'active' : ''}`} onClick={() => setTab('calendar')}>Combined Calendar</button>
             <button className={`tab ${tab === 'breaks' ? 'active' : ''}`} onClick={() => setTab('breaks')}>Break Performance</button>
-            <button className={`tab ${tab === 'singles' ? 'active' : ''}`} onClick={() => setTab('singles')}>Singles Performance</button>
           </nav>
 
           {message && <div className="message">{message}</div>}
@@ -853,95 +835,40 @@ export default function OwnerPerformancePage() {
                   <section className="panel hero">
                     <div className="section-head">
                       <div>
-                        <div className="eyebrow">All-time business overview</div>
-                        <h2>Complete Performance</h2>
+                        <div className="eyebrow">Business overview</div>
+                        <h2>At a Glance</h2>
                       </div>
-                      <div className="muted">Break Operations + Singles Centre</div>
+                      <div className="muted">All-time performance</div>
                     </div>
 
                     <div className="stats-grid">
                       <StatCard label="Gross Sales" value={money(allBreaks.gross + allSingles.gross)} sub={`Breaks ${money(allBreaks.gross)} · Singles ${money(allSingles.gross)}`} />
-                      <StatCard label="Net Sales" value={money(allBreaks.net + allSingles.net)} sub={`After platform fees`} />
+                      <StatCard label="Net Sales" value={money(allBreaks.net + allSingles.net)} />
                       <StatCard label="Total Profit" value={money(totalProfit)} positive sub={`Breaks ${money(allBreaks.profit)} · Singles ${money(allSingles.profit)}`} />
                       <StatCard label="Inventory Value" value={money(inventoryValue)} />
-                      <StatCard label="Streams" value={String(allBreaks.streams)} sub={`${allBreaks.packs} packs used`} />
-                      <StatCard label="Cards Sold" value={String(allSingles.cards)} />
-                      <StatCard label="Sealed Sold" value={String(allSingles.sealed)} />
-                      <StatCard label="Average Profit / Stream" value={money(allBreaks.streams ? allBreaks.profit / allBreaks.streams : 0)} />
+                      <StatCard label="Break Streams" value={String(allBreaks.streams)} sub={`${allBreaks.packs} packs used`} />
+                      <StatCard label="Singles Sold" value={String(allSingles.items)} sub={`${allSingles.cards} cards · ${allSingles.sealed} sealed`} />
                     </div>
-                  </section>
-
-                  <section className="panel">
-                    <div className="section-head">
-                      <div>
-                        <div className="eyebrow">Selected payrun</div>
-                        <h2>{shortDate(selectedPayrun.start)} → {shortDate(selectedPayrun.end)}</h2>
-                      </div>
-                      <div className="muted">{percent(payrunProfitChange)} vs previous payrun</div>
-                    </div>
-
-                    <div className="stats-grid">
-                      <StatCard label="Gross Sales" value={money(currentPayrunSummary.gross)} />
-                      <StatCard label="Net Sales" value={money(currentPayrunSummary.net)} />
-                      <StatCard label="Profit" value={money(currentPayrunSummary.profit)} positive />
-                      <StatCard label="Break Streams" value={String(currentPayrunSummary.breaks.streams)} />
-                      <StatCard label="Singles Sales" value={String(currentPayrunSummary.singles.transactions)} />
-                      <StatCard label="Packs Used" value={String(currentPayrunSummary.breaks.packs)} />
-                      <StatCard label="Cards Sold" value={String(currentPayrunSummary.singles.cards)} />
-                      <StatCard label="Sealed Sold" value={String(currentPayrunSummary.singles.sealed)} />
-                    </div>
-
-                    <div className="section-head" style={{ marginTop: 18 }}>
-                      <div>
-                        <div className="eyebrow">Average per stream</div>
-                        <h2>Current Payrun Averages</h2>
-                      </div>
-                      <div className="muted">{currentPayrunStreamCount} recorded stream / sale entries</div>
-                    </div>
-
-                    <div className="stats-grid">
-                      <StatCard label="Average Gross / Stream" value={money(currentPayrunStreamCount ? currentPayrunSummary.gross / currentPayrunStreamCount : 0)} />
-                      <StatCard label="Average Net / Stream" value={money(currentPayrunStreamCount ? currentPayrunSummary.net / currentPayrunStreamCount : 0)} />
-                      <StatCard label="Average Profit / Stream" value={money(currentPayrunStreamCount ? currentPayrunSummary.profit / currentPayrunStreamCount : 0)} positive />
-                      <StatCard label="Average Packs / Break Stream" value={decimal(currentPayrunSummary.breaks.streams ? currentPayrunSummary.breaks.packs / currentPayrunSummary.breaks.streams : 0)} />
-                      <StatCard label="Average Cards / Singles Sale" value={decimal(currentPayrunSummary.singles.transactions ? currentPayrunSummary.singles.cards / currentPayrunSummary.singles.transactions : 0)} />
-                      <StatCard label="Average Sealed / Singles Sale" value={decimal(currentPayrunSummary.singles.transactions ? currentPayrunSummary.singles.sealed / currentPayrunSummary.singles.transactions : 0)} />
-                    </div>
-
-                    <div className="payrun-grid">
-                      <PayrunCard title="Previous" data={previousPayrunSummary} onClick={() => setPayrunOffset((value) => value - 1)} />
-                      <PayrunCard title="Current" data={currentPayrunSummary} active onClick={() => {}} />
-                      <PayrunCard title="Next" data={nextPayrunSummary} onClick={() => setPayrunOffset((value) => value + 1)} />
-                    </div>
-
-                    {payrunOffset !== 0 && (
-                      <div className="actions" style={{ marginTop: 12 }}>
-                        <button className="button" onClick={() => setPayrunOffset(0)}>Return to Current Payrun</button>
-                      </div>
-                    )}
                   </section>
 
                   <div className="grid-2">
                     <section className="panel">
-                      <div className="eyebrow">Inventory snapshot</div>
-                      <h2>Current Stock Value</h2>
+                      <div className="eyebrow">Inventory</div>
+                      <h2>Stock Value</h2>
                       <div className="stats-grid">
-                        <StatCard label="Collection Inventory" value={money(collectionValue)} />
-                        <StatCard label="Tracked Cards" value={money(trackedValue)} />
-                        <StatCard label="Sealed Products" value={money(sealedValue)} />
-                        <StatCard label="Giveaway Stock" value={money(giveawayValue)} />
+                        <StatCard label="Singles Stock" value={money(collectionValue + trackedValue)} />
+                        <StatCard label="Sealed Stock" value={money(sealedValue)} />
                         <StatCard label="Break Stock" value={money(breakStockValue)} />
-                        <StatCard label="Total Inventory" value={money(inventoryValue)} />
+                        <StatCard label="Giveaway Stock" value={money(giveawayValue)} />
                       </div>
                     </section>
 
                     <section className="panel">
-                      <div className="eyebrow">Best performing</div>
-                      <h2>Business Records</h2>
+                      <div className="eyebrow">Key records</div>
+                      <h2>Best Performance</h2>
                       <div className="stats-grid">
-                        <StatCard label="Best Combined Day" value={combinedDailyRows[0] ? money(combinedDailyRows[0].profit) : money(0)} positive sub={combinedDailyRows[0] ? fullDate(combinedDailyRows[0].date) : 'No data'} />
-                        <StatCard label="Best Break Stream" value={bestBreakStream ? money(bestBreakStream.profit) : money(0)} positive sub={bestBreakStream ? fullDate(bestBreakStream.stream_date) : 'No data'} />
-                        <StatCard label="Best Singles Sale" value={bestSinglesSale ? money(bestSinglesSale.profit) : money(0)} positive sub={bestSinglesSale ? bestSinglesSale.description || fullDate(bestSinglesSale.sold_date) : 'No data'} />
+                        <StatCard label="Best Combined Day" value={combinedDailyRows[0] ? money(combinedDailyRows[0].profit) : money(0)} positive sub={combinedDailyRows[0] ? shortDate(combinedDailyRows[0].date) : 'No data'} />
+                        <StatCard label="Best Break Stream" value={bestBreakStream ? money(bestBreakStream.profit) : money(0)} positive sub={bestBreakStream ? shortDate(bestBreakStream.stream_date) : 'No data'} />
                         <StatCard label="Break Profit Share" value={`${totalProfit ? decimal((allBreaks.profit / totalProfit) * 100) : '0.0'}%`} />
                         <StatCard label="Singles Profit Share" value={`${totalProfit ? decimal((allSingles.profit / totalProfit) * 100) : '0.0'}%`} />
                       </div>
@@ -952,32 +879,90 @@ export default function OwnerPerformancePage() {
 
               {tab === 'calendar' && (
                 <>
-                  <section className="panel">
-                    <div className="calendar-head">
-                      <button className="button" onClick={() => { const date = new Date(selectedYear, selectedMonth - 1, 1); setSelectedYear(date.getFullYear()); setSelectedMonth(date.getMonth()) }}>←</button>
-                      <div style={{ textAlign: 'center' }}>
-                        <div className="eyebrow">Combined calendar</div>
-                        <h2>{monthLabel(selectedYear, selectedMonth)}</h2>
+                  <section className="panel hero">
+                    <div className="calendar-nav">
+                      <button
+                        className="button"
+                        onClick={() => {
+                          setPayrunOffset((value) => value - 1)
+                          setSelectedDate(previousPayrun.start)
+                        }}
+                      >
+                        ←
+                      </button>
+
+                      <div className="calendar-period">
+                        <div className="eyebrow">Two-week payrun</div>
+                        <h2>{shortDate(selectedPayrun.start)} → {shortDate(selectedPayrun.end)}</h2>
+                        <div className="muted">
+                          Payrun {selectedPayrun.index} · {percent(payrunProfitChange)} profit vs previous
+                        </div>
                       </div>
-                      <button className="button" onClick={() => { const date = new Date(selectedYear, selectedMonth + 1, 1); setSelectedYear(date.getFullYear()); setSelectedMonth(date.getMonth()) }}>→</button>
+
+                      <button
+                        className="button"
+                        onClick={() => {
+                          setPayrunOffset((value) => value + 1)
+                          setSelectedDate(nextPayrun.start)
+                        }}
+                      >
+                        →
+                      </button>
                     </div>
 
-                    <div className="calendar-grid">
-                      {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => <div className="weekday" key={day}>{day}</div>)}
-                      {calendarDays.map((day) => {
-                        const breakSummary = summariseBreaks(breaks.filter((row) => row.stream_date === day.key))
-                        const singlesSummary = summariseSingles(singles.filter((row) => row.sold_date === day.key))
-                        return (
-                          <button key={day.key} className={`day ${day.inMonth ? '' : 'out'} ${selectedDate === day.key ? 'selected' : ''}`} onClick={() => setSelectedDate(day.key)}>
-                            <strong>{parseDate(day.key).getDate()}</strong>
-                            <strong className="profit">{money(breakSummary.profit + singlesSummary.profit)}</strong>
-                            <span>Breaks: {money(breakSummary.profit)}</span>
-                            <span>Singles: {money(singlesSummary.profit)}</span>
-                            <span>{breakSummary.streams} streams · {breakSummary.packs} packs</span>
-                            <span>{singlesSummary.cards} cards · {singlesSummary.sealed} sealed</span>
-                          </button>
-                        )
-                      })}
+                    <div className="calendar-summary">
+                      <StatCard label="Gross Sales" value={money(currentPayrunSummary.gross)} />
+                      <StatCard label="Net Sales" value={money(currentPayrunSummary.net)} />
+                      <StatCard label="Profit" value={money(currentPayrunSummary.profit)} positive />
+                      <StatCard
+                        label="Activity"
+                        value={`${currentPayrunSummary.breaks.streams} / ${currentPayrunSummary.singles.transactions}`}
+                        sub="Break streams / singles sales"
+                      />
+                    </div>
+
+                    {payrunOffset !== 0 && (
+                      <div className="actions" style={{ justifyContent: 'center', marginTop: 12 }}>
+                        <button
+                          className="button"
+                          onClick={() => {
+                            setPayrunOffset(0)
+                            setSelectedDate(todayKey())
+                          }}
+                        >
+                          Current Payrun
+                        </button>
+                      </div>
+                    )}
+                  </section>
+
+                  <section className="panel">
+                    <div className="section-head">
+                      <div>
+                        <div className="eyebrow">Combined calendar</div>
+                        <h2>Breaks + Singles</h2>
+                      </div>
+                      <div className="muted">Click any day for its performance</div>
+                    </div>
+
+                    <div className="payrun-calendar">
+                      {[payrunWeekOne, payrunWeekTwo].map((week, weekIndex) => (
+                        <div className="payrun-week" key={weekIndex}>
+                          {week.map((day) => (
+                            <button
+                              key={day.key}
+                              className={`day ${selectedDate === day.key ? 'selected' : ''}`}
+                              onClick={() => setSelectedDate(day.key)}
+                            >
+                              <span>{parseDate(day.key).toLocaleDateString('en-GB', { weekday: 'short' })}</span>
+                              <strong>{parseDate(day.key).getDate()}</strong>
+                              <strong className="profit">{money(day.profit)}</strong>
+                              <span>Breaks {money(day.breakSummary.profit)}</span>
+                              <span>Singles {money(day.singlesSummary.profit)}</span>
+                            </button>
+                          ))}
+                        </div>
+                      ))}
                     </div>
                   </section>
 
@@ -985,12 +970,11 @@ export default function OwnerPerformancePage() {
                     <div className="eyebrow">Selected day</div>
                     <h2>{fullDate(selectedDate)}</h2>
                     <div className="stats-grid">
-                      <StatCard label="Combined Gross" value={money(dayBreaks.gross + daySingles.gross)} />
-                      <StatCard label="Combined Net" value={money(dayBreaks.net + daySingles.net)} />
-                      <StatCard label="Combined Profit" value={money(dayBreaks.profit + daySingles.profit)} positive />
-                      <StatCard label="Break Profit" value={money(dayBreaks.profit)} sub={`${dayBreaks.streams} streams · ${dayBreaks.packs} packs`} />
-                      <StatCard label="Singles Profit" value={money(daySingles.profit)} sub={`${daySingles.cards} cards · ${daySingles.sealed} sealed`} />
-                      <StatCard label="Total Items" value={String(dayBreaks.packs + daySingles.items)} />
+                      <StatCard label="Gross" value={money(dayBreaks.gross + daySingles.gross)} />
+                      <StatCard label="Net" value={money(dayBreaks.net + daySingles.net)} />
+                      <StatCard label="Profit" value={money(dayBreaks.profit + daySingles.profit)} positive />
+                      <StatCard label="Breaks" value={money(dayBreaks.profit)} sub={`${dayBreaks.streams} streams · ${dayBreaks.packs} packs`} />
+                      <StatCard label="Singles" value={money(daySingles.profit)} sub={`${daySingles.cards} cards · ${daySingles.sealed} sealed`} />
                     </div>
                   </section>
                 </>
@@ -1000,33 +984,42 @@ export default function OwnerPerformancePage() {
                 <>
                   <section className="panel hero">
                     <div className="section-head">
-                      <div><div className="eyebrow">Break performance</div><h2>All-Time Break Operations</h2></div>
-                      <div className="muted">Giveaways excluded from packs used</div>
+                      <div>
+                        <div className="eyebrow">Break performance</div>
+                        <h2>Break Operations</h2>
+                      </div>
+                      <div className="muted">{allBreaks.streams} streams · {allBreaks.packs} packs</div>
                     </div>
+
                     <div className="stats-grid">
                       <StatCard label="Gross Sales" value={money(allBreaks.gross)} />
                       <StatCard label="Net Sales" value={money(allBreaks.net)} />
                       <StatCard label="Profit" value={money(allBreaks.profit)} positive />
                       <StatCard label="Margin" value={`${allBreaks.net ? decimal((allBreaks.profit / allBreaks.net) * 100) : '0.0'}%`} />
-                      <StatCard label="Streams" value={String(allBreaks.streams)} />
-                      <StatCard label="Packs Used" value={String(allBreaks.packs)} />
-                      <StatCard label="Average Sales / Stream" value={money(allBreaks.streams ? allBreaks.gross / allBreaks.streams : 0)} />
-                      <StatCard label="Average Net / Stream" value={money(allBreaks.streams ? allBreaks.net / allBreaks.streams : 0)} />
-                      <StatCard label="Average Profit / Stream" value={money(allBreaks.streams ? allBreaks.profit / allBreaks.streams : 0)} />
-                      <StatCard label="Average Packs / Stream" value={decimal(allBreaks.streams ? allBreaks.packs / allBreaks.streams : 0)} />
+                      <StatCard label="Avg Profit / Stream" value={money(allBreaks.streams ? allBreaks.profit / allBreaks.streams : 0)} positive />
+                      <StatCard label="Avg Packs / Stream" value={decimal(allBreaks.streams ? allBreaks.packs / allBreaks.streams : 0)} />
                     </div>
                   </section>
 
                   <section className="panel">
-                    <div className="eyebrow">Best streams ever</div>
-                    <h2>Highest Profit Break Streams</h2>
+                    <div className="section-head">
+                      <div>
+                        <div className="eyebrow">Top streams</div>
+                        <h2>Highest Profit Breaks</h2>
+                      </div>
+                      <div className="muted">Top 10 all time</div>
+                    </div>
+
                     <div className="table">
-                      {[...breaks].sort((a, b) => num(b.profit) - num(a.profit)).slice(0, 15).map((row, index) => (
-                        <div className="table-row" key={row.id}>
-                          <strong><span className="rank">{index + 1}</span>{fullDate(row.stream_date)}{row.stream_slot ? ` · Stream ${row.stream_slot}` : ''}</strong>
+                      {[...breaks].sort((a, b) => num(b.profit) - num(a.profit)).slice(0, 10).map((row, index) => (
+                        <div className="table-row compact" key={row.id}>
+                          <strong>
+                            <span className="rank">{index + 1}</span>
+                            {shortDate(row.stream_date)}
+                            {row.stream_slot ? ` · Stream ${row.stream_slot}` : ''}
+                          </strong>
                           <span>Sales {money(row.sales)}</span>
                           <span>Net {money(row.sales_after_fees)}</span>
-                          <span>Cost {money(row.total_cost)}</span>
                           <span className="positive">Profit {money(row.profit)}</span>
                           <span>{packsOnlyByStream.get(row.id) || 0} packs</span>
                         </div>
@@ -1036,65 +1029,6 @@ export default function OwnerPerformancePage() {
                 </>
               )}
 
-              {tab === 'singles' && (
-                <>
-                  <section className="panel hero">
-                    <div className="section-head">
-                      <div><div className="eyebrow">Singles performance</div><h2>All-Time Singles Centre</h2></div>
-                      <div className="muted">Giveaways excluded from cards and sealed sold</div>
-                    </div>
-                    <div className="stats-grid">
-                      <StatCard label="Gross Sales" value={money(allSingles.gross)} />
-                      <StatCard label="Net Sales" value={money(allSingles.net)} />
-                      <StatCard label="Profit" value={money(allSingles.profit)} positive />
-                      <StatCard label="Margin" value={`${allSingles.net ? decimal((allSingles.profit / allSingles.net) * 100) : '0.0'}%`} />
-                      <StatCard label="Transactions" value={String(allSingles.transactions)} />
-                      <StatCard label="Cards Sold" value={String(allSingles.cards)} />
-                      <StatCard label="Sealed Sold" value={String(allSingles.sealed)} />
-                      <StatCard label="Average Gross / Transaction" value={money(allSingles.transactions ? allSingles.gross / allSingles.transactions : 0)} />
-                      <StatCard label="Average Net / Transaction" value={money(allSingles.transactions ? allSingles.net / allSingles.transactions : 0)} />
-                      <StatCard label="Average Profit / Transaction" value={money(allSingles.transactions ? allSingles.profit / allSingles.transactions : 0)} />
-                    </div>
-                  </section>
-
-                  <section className="panel">
-                    <div className="eyebrow">Platform performance</div>
-                    <h2>Singles by Platform</h2>
-                    <div className="table">
-                      {platformRows.map((row) => (
-                        <div className="table-row" key={row.platform}>
-                          <strong>{row.platform.charAt(0).toUpperCase() + row.platform.slice(1)}</strong>
-                          <span>Gross {money(row.gross)}</span>
-                          <span>Net {money(row.net)}</span>
-                          <span className="positive">Profit {money(row.profit)}</span>
-                          <span>{row.transactions} transactions</span>
-                          <span>{row.cards} cards · {row.sealed} sealed</span>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-
-                  <section className="panel">
-                    <div className="eyebrow">Best streams ever</div>
-                    <h2>Highest Profit Singles Streams / Sales</h2>
-                    <div className="table">
-                      {[...singles].sort((a, b) => num(b.profit) - num(a.profit)).slice(0, 15).map((row, index) => {
-                        const breakdown = getSinglesBreakdown(row, sealed)
-                        return (
-                          <div className="table-row" key={row.id}>
-                            <strong><span className="rank">{index + 1}</span>{row.description || 'Singles sale'}<div className="muted">{shortDate(row.sold_date)}</div></strong>
-                            <span>{row.platform.charAt(0).toUpperCase() + row.platform.slice(1)}</span>
-                            <span>Gross {money(row.sale_price)}</span>
-                            <span>Net {money(row.net_sale)}</span>
-                            <span className="positive">Profit {money(row.profit)}</span>
-                            <span>{breakdown.cards} cards · {breakdown.sealed} sealed</span>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </section>
-                </>
-              )}
             </>
           )}
         </div>
