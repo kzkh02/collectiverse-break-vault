@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation'
 import { supabase } from '../../../lib/supabase'
 
 type Tab = 'latest' | 'lifetime' | 'hall'
-type HitTier = 'sir' | 'gold' | 'mar' | 'ir' | 'sr' | 'ex' | 'clc'
+type HitTier = 'sir' | 'gold' | 'future' | 'mar' | 'ir' | 'sr' | 'ex' | 'clc'
 type RankKey = 'overall' | HitTier
 type RankTotals = Record<RankKey, number>
 
@@ -26,6 +26,7 @@ type CollectorBadge = {
 const tierLabels: Record<string, string> = {
   sir: 'SIR',
   gold: 'GOLD',
+  future: 'FUTURE',
   mar: 'MAR',
   ir: 'IR',
   sr: 'SR',
@@ -33,8 +34,8 @@ const tierLabels: Record<string, string> = {
   clc: 'CLC',
 }
 
-const hitTiers: HitTier[] = ['sir', 'gold', 'mar', 'ir', 'sr', 'ex', 'clc']
-const showcaseTiers = ['sir', 'gold', 'mar']
+const hitTiers: HitTier[] = ['sir', 'gold', 'future', 'mar', 'clc', 'ir', 'sr', 'ex']
+const showcaseTiers = ['sir', 'gold', 'future', 'mar', 'clc']
 
 const DEMO_USERNAME = 'demo'
 
@@ -124,7 +125,7 @@ function resolveCollectorHitImage(
   const setKey = normaliseImageKey(setName)
   const tierLabel = tierLabels[String(tier || '').toLowerCase()] || String(tier || '').replace(/_/g, ' ').toUpperCase()
   const cleanBase = canonicalImageName(rawName)
-    .replace(/\s+(sir|gold|mar|ir|sr|ex|clc)$/i, '')
+    .replace(/\s+(sir|gold|future|mar|ir|sr|ex|clc)$/i, '')
     .trim()
   let cleanTier = canonicalImageName(tierLabel)
 
@@ -156,7 +157,7 @@ function resolveCollectorHitImage(
 
     // Legacy split-card images were uploaded as e.g. "Salazzle (IR)".
     // Only use that legacy row when its bracketed tier matches this hit.
-    const legacyBracketTier = String(rowCard).match(/\((SIR|GOLD|MAR|IR|SR|EX|CLC)\)\s*$/i)?.[1] || ''
+    const legacyBracketTier = String(rowCard).match(/\((SIR|GOLD|FUTURE|MAR|IR|SR|EX|CLC)\)\s*$/i)?.[1] || ''
     if (
       cleanTier &&
       canonicalImageName(legacyBracketTier) === cleanTier &&
@@ -189,7 +190,7 @@ function cardVariantName(value: string, tier: string | null) {
 }
 
 function imageVariantName(value: string, tier: string | null) {
-  const base = baseCardName(value).replace(/\s+(SIR|GOLD|MAR|IR|SR|EX|CLC)$/i, '').trim()
+  const base = baseCardName(value).replace(/\s+(SIR|GOLD|FUTURE|MAR|IR|SR|EX|CLC)$/i, '').trim()
   const label = tierLabels[String(tier || '').toLowerCase()] || String(tier || '').replace(/_/g, ' ').toUpperCase()
   return tier ? `${base} ${label}`.trim() : base
 }
@@ -214,6 +215,8 @@ function getTierClass(tier: string | null) {
       return 'hit-sir'
     case 'gold':
       return 'hit-gold'
+    case 'future':
+      return 'hit-future'
     case 'mar':
       return 'hit-mar'
     case 'ir':
@@ -235,6 +238,8 @@ function getTierEmoji(tier: string | null) {
       return '👑'
     case 'gold':
       return '🥇'
+    case 'future':
+      return '⚡'
     case 'mar':
       return '🌌'
     case 'ir':
@@ -267,6 +272,7 @@ function getEmptyRankTotals(): RankTotals {
     overall: 0,
     sir: 0,
     gold: 0,
+    future: 0,
     mar: 0,
     ir: 0,
     sr: 0,
@@ -349,6 +355,7 @@ export default function VaultPage() {
     overall: null,
     sir: null,
     gold: null,
+    future: null,
     mar: null,
     ir: null,
     sr: null,
@@ -534,6 +541,7 @@ export default function VaultPage() {
         overall: getRank('overall'),
         sir: getRank('sir'),
         gold: getRank('gold'),
+        future: getRank('future'),
         mar: getRank('mar'),
         ir: getRank('ir'),
         sr: getRank('sr'),
@@ -587,6 +595,7 @@ export default function VaultPage() {
     overall: hits.length,
     sir: hits.filter((h) => h.hit_tier === 'sir').length,
     gold: hits.filter((h) => h.hit_tier === 'gold').length,
+    future: hits.filter((h) => h.hit_tier === 'future').length,
     mar: hits.filter((h) => h.hit_tier === 'mar').length,
     ir: hits.filter((h) => h.hit_tier === 'ir').length,
     sr: hits.filter((h) => h.hit_tier === 'sr').length,
@@ -602,7 +611,7 @@ export default function VaultPage() {
   const bestHits = hits
     .filter((hit) => showcaseTiers.includes(hit.hit_tier))
     .sort((a, b) => {
-      const order: Record<string, number> = { sir: 1, gold: 2, mar: 3 }
+      const order: Record<string, number> = { sir: 1, gold: 2, future: 3, mar: 4, clc: 5 }
       const tierSort = order[a.hit_tier] - order[b.hit_tier]
 
       if (tierSort !== 0) return tierSort
@@ -719,6 +728,26 @@ export default function VaultPage() {
         <span className="fx-extra" />
         <span className="fx-flare" />
       
+        {tier === 'future' && (
+          <div className="future-interface">
+            <span className="future-grid" />
+            <span className="future-scan" />
+            <span className="future-corner future-corner-tl" />
+            <span className="future-corner future-corner-tr" />
+            <span className="future-corner future-corner-bl" />
+            <span className="future-corner future-corner-br" />
+            <span className="future-circuit future-circuit-a" />
+            <span className="future-circuit future-circuit-b" />
+            <span className="future-pulse" />
+            <span className="future-orbit future-orbit-one" />
+            <span className="future-orbit future-orbit-two" />
+            <span className="future-data future-data-top" />
+            <span className="future-data future-data-bottom" />
+            <span className="future-node future-node-a" />
+            <span className="future-node future-node-b" />
+          </div>
+        )}
+
         {tier === 'ir' && (
           <svg className="ir-spectral-field" viewBox="0 0 1000 260" preserveAspectRatio="none">
             <defs>
@@ -770,82 +799,58 @@ export default function VaultPage() {
         )}
       
         {tier === 'sir' && (
-          <>
-            <div className="sir-flash-system">
-              <span className="sir-starburst sir-starburst-1" />
-              <span className="sir-starburst sir-starburst-2" />
-              <span className="sir-rainbow-ring" />
-            </div>
-      
-            <svg className="sir-fracture-system" viewBox="0 0 1000 260" preserveAspectRatio="none">
+          <div className="sir-prismatic-system">
+            <div className="sir-prism-aura" />
+            <div className="sir-prism-ribbon sir-prism-ribbon-one" />
+            <div className="sir-prism-ribbon sir-prism-ribbon-two" />
+            <div className="sir-prism-shimmer" />
+            <svg className="sir-prism-stars" viewBox="0 0 1000 260" preserveAspectRatio="none">
               <defs>
-                <linearGradient id="sirFractureGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#ffffff" />
-                  <stop offset="24%" stopColor="#67e8f9" />
-                  <stop offset="52%" stopColor="#c4b5fd" />
-                  <stop offset="76%" stopColor="#f0abfc" />
-                  <stop offset="100%" stopColor="#ffffff" />
-                </linearGradient>
-                <filter id="sirFractureGlow" x="-40%" y="-80%" width="180%" height="260%">
-                  <feGaussianBlur stdDeviation="3.5" result="blur" />
-                  <feMerge>
-                    <feMergeNode in="blur" />
-                    <feMergeNode in="SourceGraphic" />
-                  </feMerge>
+                <radialGradient id="sirPrismStar"><stop stopColor="#fff"/><stop offset=".24" stopColor="#fff" stopOpacity=".95"/><stop offset="1" stopColor="#c4b5fd" stopOpacity="0"/></radialGradient>
+              </defs>
+              {[[75,42,11],[220,206,7],[364,35,9],[535,219,12],[700,48,8],[890,192,11],[956,37,7]].map(([x,y,r],i)=>(
+                <g key={i} className={`sir-prism-star sir-prism-star-${i}`}>
+                  <circle cx={x} cy={y} r={r*2.5} fill="url(#sirPrismStar)" />
+                  <path d={`M${x-r*2} ${y} H${x+r*2} M${x} ${y-r*2} V${y+r*2}`} stroke="#fff" strokeWidth="1.4" strokeLinecap="round" />
+                </g>
+              ))}
+            </svg>
+          </div>
+        )}
+
+        {tier === 'mar' && (
+          <div className="mar-storm-system">
+            <div className="mar-storm-glow" />
+            <svg className="mar-storm-lightning mar-constrictor" viewBox="0 0 1000 260" preserveAspectRatio="none" aria-hidden="true">
+              <defs>
+                <filter id="marConstrictorBloom" x="-35%" y="-100%" width="170%" height="300%">
+                  <feGaussianBlur stdDeviation="4.5" />
                 </filter>
               </defs>
-      
-              <g className="sir-fracture-glow" filter="url(#sirFractureGlow)">
-                <path className="sir-crack sir-crack-main" pathLength="1" stroke="url(#sirFractureGradient)"
-                  d="M505 126 L458 96 L421 108 L374 74 L330 88 L284 48 L238 61 L191 30" />
-                <path className="sir-crack sir-crack-main sir-crack-right" pathLength="1" stroke="url(#sirFractureGradient)"
-                  d="M505 126 L554 103 L598 117 L646 80 L692 96 L738 55 L786 69 L837 36" />
-                <path className="sir-crack sir-crack-down" pathLength="1" stroke="url(#sirFractureGradient)"
-                  d="M505 126 L482 158 L501 181 L470 207 L486 232 L458 269" />
-                <path className="sir-crack sir-crack-up" pathLength="1" stroke="url(#sirFractureGradient)"
-                  d="M505 126 L524 92 L510 67 L539 41 L525 17 L548 -10" />
-      
-                <path className="sir-crack sir-crack-branch branch-one" pathLength="1" stroke="url(#sirFractureGradient)"
-                  d="M374 74 L385 42 L367 20" />
-                <path className="sir-crack sir-crack-branch branch-two" pathLength="1" stroke="url(#sirFractureGradient)"
-                  d="M284 48 L267 83 L239 103" />
-                <path className="sir-crack sir-crack-branch branch-three" pathLength="1" stroke="url(#sirFractureGradient)"
-                  d="M646 80 L630 47 L650 23" />
-                <path className="sir-crack sir-crack-branch branch-four" pathLength="1" stroke="url(#sirFractureGradient)"
-                  d="M738 55 L758 92 L790 109" />
-                <path className="sir-crack sir-crack-branch branch-five" pathLength="1" stroke="url(#sirFractureGradient)"
-                  d="M470 207 L433 196 L408 216" />
-                <path className="sir-crack sir-crack-branch branch-six" pathLength="1" stroke="url(#sirFractureGradient)"
-                  d="M539 41 L574 54 L601 35" />
-              </g>
-      
-              <circle className="sir-fracture-core" cx="505" cy="126" r="5" />
+              {[
+                { d: 'M-45 30 L18 17 48 37 78 22 113 45 147 27 184 51 221 36 258 60 295 43 333 66 370 50 409 74 447 56 486 78 523 61 563 82 602 66 644 90 683 72 723 97 763 79 805 103 846 85 886 109 927 91 966 115 1045 93', branch: 'M154 115 L142 84 160 64 M477 173 L489 204 512 217 M803 175 L819 146 841 137' },
+                { d: 'M1045 152 L988 168 955 145 919 173 885 153 849 182 815 161 781 190 747 170 712 198 678 178 644 208 608 185 572 217 536 195 501 224 466 202 430 231 395 208 358 238 321 216 285 245 250 223 214 251 178 228 142 253 108 228 73 246 37 221 -45 245', branch: 'M285 245 L275 212 293 190 M644 208 L659 236 683 252' },
+                { d: 'M-36 120 L19 100 51 129 86 107 119 138 154 115 189 145 225 122 259 152 294 130 331 160 368 136 404 167 442 142 477 173 515 149 550 179 587 155 624 187 660 163 696 192 731 169 768 197 803 175 838 201 875 180 910 204 946 184 981 208 1040 189', branch: 'M225 122 L207 95 215 71 M696 192 L708 222 731 233' },
+                { d: 'M70 -35 L54 17 83 41 64 74 96 102 77 135 109 166 92 199 123 233 104 291', branch: 'M96 102 L128 108 149 125 M92 199 L61 212 45 239' },
+                { d: 'M335 -35 L315 8 343 34 321 64 350 91 328 119 360 148 336 177 367 205 345 235 373 291', branch: 'M350 91 L382 83 405 60 M367 205 L397 218 417 241' },
+                { d: 'M681 -35 L659 10 688 37 667 67 697 94 674 122 704 150 682 180 712 208 690 237 718 291', branch: 'M697 94 L729 87 749 64 M682 180 L650 189 634 216' },
+                { d: 'M963 -35 L943 16 973 45 949 77 979 108 952 139 981 171 957 201 987 231 966 291', branch: 'M979 108 L942 118 918 139 M957 201 L925 215 906 242' },
+                { d: 'M-40 64 L12 78 39 63 69 88 100 70 131 96 163 79 194 105 226 88 259 114 290 98 324 123 355 106 388 132 420 115 453 141 487 125 520 151 553 135 587 160 620 144 653 171 687 155 721 181 755 165 790 192 824 176 858 202 892 185 927 212 961 194 1040 222', branch: 'M324 123 L338 94 361 82 M755 165 L743 136 761 112' },
+              ].map((arc, index) => (
+                <g key={index} className={`mar-coil mar-coil-${index + 1}`}>
+                  <g className="mar-coil-bloom" filter="url(#marConstrictorBloom)">
+                    <path d={arc.d} /><path d={arc.branch} />
+                  </g>
+                  <g className="mar-coil-electric">
+                    <path d={arc.d} /><path d={arc.branch} />
+                  </g>
+                  <g className="mar-coil-white">
+                    <path d={arc.d} /><path d={arc.branch} />
+                  </g>
+                </g>
+              ))}
             </svg>
-          </>
-        )}
-      
-        {tier === 'mar' && (
-          <svg className="mar-electric-field" viewBox="0 0 1000 260" preserveAspectRatio="none">
-            <defs>
-              <filter id="marElectricGlow" x="-40%" y="-80%" width="180%" height="260%">
-                <feGaussianBlur stdDeviation="4" result="blur" />
-                <feMerge>
-                  <feMergeNode in="blur" />
-                  <feMergeNode in="SourceGraphic" />
-                </feMerge>
-              </filter>
-            </defs>
-            <g filter="url(#marElectricGlow)">
-              <path className="electric-arc arc-a" d="M-20 52 L55 43 L91 61 L137 31 L185 55 L231 42 L278 66 L329 34 L377 54 L423 28 L469 51 L518 37 L566 62 L616 39 L662 55 L713 30 L760 52 L810 38 L857 60 L906 34 L1020 51" />
-              <path className="electric-arc arc-b" d="M18 211 L77 191 L121 213 L168 184 L213 205 L260 178 L307 207 L352 187 L398 214 L445 181 L492 203 L539 179 L586 208 L634 185 L681 211 L728 181 L775 204 L824 180 L873 207 L922 185 L1018 210" />
-              <path className="electric-arc arc-c" d="M55 -12 L76 29 L62 55 L91 79 L73 108 L101 133 L79 160 L108 188 L87 214 L113 272" />
-              <path className="electric-arc arc-d" d="M913 -12 L888 27 L906 54 L879 81 L899 109 L870 136 L892 164 L864 191 L886 219 L858 272" />
-              <path className="electric-branch branch-a" d="M278 66 L255 92 L268 109 L244 132" />
-              <path className="electric-branch branch-b" d="M713 30 L733 63 L719 81 L744 105" />
-              <path className="electric-branch branch-c" d="M398 214 L420 190 L411 171 L437 148" />
-              <path className="electric-branch branch-d" d="M870 136 L835 124 L817 143 L788 132" />
-            </g>
-          </svg>
+          </div>
         )}
       </div>
     )
@@ -1910,6 +1915,7 @@ function MessageCard() {
           animation: fastSweep 2.5s infinite;
         }
 
+        .hit-future { border-color: rgba(34,211,238,.75); background: linear-gradient(145deg,rgba(8,47,73,.7),rgba(76,29,149,.38)); box-shadow: 0 0 24px rgba(34,211,238,.22); }
         .hit-gold {
           border: 2px solid rgba(250,204,21,.86);
           background: radial-gradient(circle at top left, rgba(255,255,255,.14), transparent 30%), linear-gradient(135deg, rgba(250,204,21,.16), rgba(168,85,247,.14), rgba(255,255,255,.06));
@@ -6062,6 +6068,7 @@ function MessageCard() {
            Existing rarity FX/pseudo-elements remain untouched. */
         .stats-grid .stat-box.hit-sir { background-color: #111827 !important; }
         .stats-grid .stat-box.hit-gold { background-color: #17120A !important; }
+        .stats-grid .stat-box.hit-future { background-color: #09182d !important; }
         .stats-grid .stat-box.hit-mar { background-color: #0C1A29 !important; }
         .stats-grid .stat-box.hit-ir { background-color: #17121E !important; }
         .stats-grid .stat-box.hit-sr { background-color: #171523 !important; }
@@ -6069,6 +6076,7 @@ function MessageCard() {
 
         .stats-grid .stat-box.hit-sir,
         .stats-grid .stat-box.hit-gold,
+        .stats-grid .stat-box.hit-future,
         .stats-grid .stat-box.hit-mar,
         .stats-grid .stat-box.hit-ir,
         .stats-grid .stat-box.hit-sr,
@@ -6376,6 +6384,211 @@ function MessageCard() {
           62% { transform: translate(1px,0); }
         }
 
+
+        /* FUTURE: holographic tech interface — scoped to Future hit cards only. */
+        .hit-card.hit-future, .showcase-hit-card.hit-future {
+          border: 1px solid rgba(74,238,255,.86);
+          background: radial-gradient(ellipse at 80% 15%,rgba(96,42,184,.33),transparent 55%),
+            radial-gradient(ellipse at 5% 85%,rgba(0,214,255,.16),transparent 55%),
+            linear-gradient(125deg,#07182c 0%,#0b1130 53%,#180e3b 100%);
+          box-shadow: 0 0 0 1px rgba(57,216,255,.12),0 0 30px rgba(0,225,255,.22),
+            0 16px 45px rgba(3,6,30,.42),inset 0 0 32px rgba(48,130,230,.12);
+          animation: futureCardBreath 5s ease-in-out infinite;
+        }
+        .hit-card.hit-future::before, .showcase-hit-card.hit-future::before {
+          inset: 0; opacity: 1;
+          background: linear-gradient(135deg,rgba(76,231,255,.14),transparent 36%,rgba(170,80,255,.10));
+          animation: none;
+        }
+        .hit-card.hit-future::after, .showcase-hit-card.hit-future::after {
+          background: linear-gradient(90deg,transparent,rgba(93,246,255,.26),rgba(226,248,255,.4),transparent);
+          animation: futureGlint 6s ease-in-out infinite;
+        }
+        .hit-future .rarity-fx { position:absolute; inset:0; z-index:0; pointer-events:none; overflow:hidden; }
+        .hit-future .rarity-fx > .fx-ambient,
+        .hit-future .rarity-fx > .fx-primary,
+        .hit-future .rarity-fx > .fx-secondary,
+        .hit-future .rarity-fx > .fx-detail,
+        .hit-future .rarity-fx > .fx-extra,
+        .hit-future .rarity-fx > .fx-flare { display:none; }
+        .hit-future .future-interface { position:absolute; inset:0; overflow:hidden; }
+        .hit-future .future-grid { position:absolute; inset:0; opacity:.25;
+          background-image:linear-gradient(rgba(61,220,255,.22) 1px,transparent 1px),linear-gradient(90deg,rgba(61,220,255,.22) 1px,transparent 1px);
+          background-size:29px 29px; transform:perspective(300px) rotateX(8deg) scale(1.15);
+          mask-image:linear-gradient(110deg,transparent 8%,black 65%);
+        }
+        .hit-future .future-scan { position:absolute; left:0; right:0; top:-20%; height:24%;
+          background:linear-gradient(180deg,transparent,rgba(46,226,255,.08),rgba(119,238,255,.25),transparent);
+          animation:futureScan 5.2s linear infinite;
+        }
+        .hit-future .future-corner { position:absolute; width:29px; height:29px;
+          border-color:#59f1ff; border-style:solid; filter:drop-shadow(0 0 7px rgba(65,238,255,.75));
+          animation:futureCornerPulse 3.5s ease-in-out infinite;
+        }
+        .hit-future .future-corner-tl { top:10px;left:10px;border-width:2px 0 0 2px; }
+        .hit-future .future-corner-tr { top:10px;right:10px;border-width:2px 2px 0 0; }
+        .hit-future .future-corner-bl { bottom:10px;left:10px;border-width:0 0 2px 2px; }
+        .hit-future .future-corner-br { bottom:10px;right:10px;border-width:0 2px 2px 0; }
+        .hit-future .future-circuit { position:absolute; width:130px;height:70px; opacity:.6;
+          border:1px solid rgba(96,236,255,.65); transform:skewX(-25deg);
+          box-shadow:0 0 12px rgba(61,221,255,.25); }
+        .hit-future .future-circuit-a { top:-48px;right:17%; }
+        .hit-future .future-circuit-b { bottom:-50px;left:19%;border-color:rgba(174,116,255,.7); }
+        .hit-future .future-pulse { position:absolute; width:210px;height:210px;right:-90px;top:-95px;
+          border:1px solid rgba(74,230,255,.25);border-radius:50%;
+          box-shadow:0 0 0 24px rgba(74,230,255,.035),0 0 0 49px rgba(139,92,246,.04);
+          animation:futureRadar 5s ease-in-out infinite;
+        }
+        .hit-future .hit-layout,.hit-future .hit-content { position:relative;z-index:2; }
+        .hit-future .hit-break { color:#9af4ff;text-shadow:0 0 12px rgba(55,224,255,.45); }
+        .hit-future h3 { text-shadow:0 0 16px rgba(53,231,255,.45),0 4px 14px rgba(0,0,0,.6); }
+        .hit-future .break-number { border-color:rgba(94,239,255,.8);background:rgba(5,35,62,.75);
+          box-shadow:0 0 14px rgba(59,225,255,.23); }
+        .hit-future .hit-card-art { filter:drop-shadow(0 0 14px rgba(45,231,255,.4)) drop-shadow(0 10px 18px rgba(0,0,0,.5)); }
+        .hit-future .hit-badge,.hit-future .badge-future {
+          background:linear-gradient(110deg,#70f5ff,#80caff 48%,#bd8dff);color:#071229;
+          border:1px solid rgba(217,253,255,.85);box-shadow:0 0 17px rgba(48,226,255,.4),inset 0 1px 0 #fff;
+        }
+        /* Brighter holographic interface, while keeping the artwork and text readable. */
+        .hit-future .future-orbit { position:absolute; width:270px;height:270px;right:-92px;top:-112px;
+          border:1px dashed rgba(99,241,255,.35);border-radius:50%;
+          box-shadow:0 0 20px rgba(63,221,255,.09);animation:futureOrbit 20s linear infinite; }
+        .hit-future .future-orbit-two { width:195px;height:195px;right:-53px;top:-74px;
+          border-color:rgba(193,116,255,.48);animation-duration:14s;animation-direction:reverse; }
+        .hit-future .future-data { position:absolute;left:17%;right:16%;height:2px;
+          background:repeating-linear-gradient(90deg,rgba(70,238,255,.8) 0 19px,transparent 19px 27px,rgba(183,111,255,.8) 27px 33px,transparent 33px 53px);
+          opacity:.5;filter:drop-shadow(0 0 5px #45eaff);animation:futureData 4s ease-in-out infinite; }
+        .hit-future .future-data-top { top:9px; }
+        .hit-future .future-data-bottom { bottom:9px;animation-delay:-2s; }
+        .hit-future .future-node { position:absolute;width:6px;height:6px;border-radius:50%;background:#8af9ff;
+          box-shadow:0 0 8px 3px rgba(54,230,255,.65);animation:futureNode 3s ease-in-out infinite; }
+        .hit-future .future-node-a { right:23%;top:21px; }
+        .hit-future .future-node-b { left:22%;bottom:21px;animation-delay:-1.5s;background:#c68bff;
+          box-shadow:0 0 8px 3px rgba(173,98,255,.6); }
+        .hit-card.hit-future .hit-badge.badge-future,
+        .showcase-hit-card.hit-future .hit-badge.badge-future,
+        .hit-future .hit-badge,
+        .hit-future .badge-future {
+          background:linear-gradient(115deg,#22e8ff 0%,#72f7ff 23%,#a68aff 58%,#e09aff 82%,#44ecff 100%) !important;
+          background-size:220% 100% !important;
+          color:#09112c !important;
+          border:1px solid #bdfbff !important;
+          opacity:1 !important;
+          -webkit-text-fill-color:#09112c !important;
+          text-shadow:none !important;
+          font-weight:950 !important;
+          letter-spacing:2px;
+          box-shadow:0 0 0 1px rgba(15,245,255,.32),0 0 18px rgba(47,237,255,.65),0 0 32px rgba(163,92,255,.32),inset 0 1px 0 rgba(255,255,255,.85) !important;
+          animation:futureBadgeShift 4s ease-in-out infinite;
+        }
+        @keyframes futureOrbit { to {transform:rotate(360deg)} }
+        @keyframes futureData { 0%,100%{opacity:.22} 50%{opacity:.72} }
+        @keyframes futureNode { 0%,100%{opacity:.4;transform:scale(.8)} 50%{opacity:1;transform:scale(1.25)} }
+        @keyframes futureBadgeShift { 0%,100%{background-position:0% 50%} 50%{background-position:100% 50%} }
+        @keyframes futureScan { from{transform:translateY(-60%)} to{transform:translateY(680%)} }
+        @keyframes futureGlint { 0%,58%{left:-85%;opacity:0} 66%{opacity:.5} 82%,100%{left:145%;opacity:0} }
+        @keyframes futureCardBreath { 0%,100%{box-shadow:0 0 0 1px rgba(57,216,255,.12),0 0 22px rgba(0,225,255,.18),0 16px 45px rgba(3,6,30,.42)} 50%{box-shadow:0 0 0 1px rgba(57,216,255,.3),0 0 38px rgba(0,225,255,.34),0 16px 45px rgba(3,6,30,.42)} }
+        @keyframes futureCornerPulse { 0%,100%{opacity:.5} 50%{opacity:1} }
+        @keyframes futureRadar { 0%,100%{opacity:.4;transform:scale(.93)} 50%{opacity:.9;transform:scale(1.08)} }
+        @media (prefers-reduced-motion:reduce) {
+          .hit-card.hit-future,.showcase-hit-card.hit-future,.hit-future .future-scan,
+          .hit-future .future-corner,.hit-future .future-pulse,
+          .hit-future .future-orbit,.hit-future .future-data,.hit-future .future-node,
+          .hit-future .badge-future { animation:none!important; }
+        }
+
+        /* SIR — premium full-art prismatic foil; replaces the old fracture motif. */
+        .hit-sir .sir-prismatic-system { position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:1; }
+        .hit-card.hit-sir,.showcase-hit-card.hit-sir { background:radial-gradient(ellipse at 25% 0%,rgba(255,111,189,.24),transparent 48%),radial-gradient(ellipse at 86% 100%,rgba(67,216,255,.25),transparent 54%),linear-gradient(120deg,#211038 0%,#16264c 42%,#331544 78%,#101b38 100%)!important;border:1px solid rgba(244,203,255,.8)!important;box-shadow:0 0 0 1px rgba(127,219,255,.3),0 0 30px rgba(215,126,255,.25),0 18px 50px rgba(0,0,0,.45)!important; }
+        .hit-sir .sir-prism-aura {position:absolute;inset:-60%;background:conic-gradient(from 25deg,transparent 0deg,rgba(250,168,235,.16) 48deg,transparent 85deg,rgba(100,229,255,.22) 135deg,transparent 185deg,rgba(253,220,129,.16) 245deg,transparent 290deg,rgba(191,150,255,.2) 340deg,transparent 360deg);animation:sirFoilTurn 15s linear infinite;}
+        .hit-sir .sir-prism-ribbon {position:absolute;inset:-50%;width:65%;transform:rotate(27deg);filter:blur(17px);background:linear-gradient(90deg,transparent,rgba(255,255,255,.13),rgba(128,238,255,.2),rgba(244,152,250,.19),transparent);animation:sirFoilSweep 7s ease-in-out infinite;}
+        .hit-sir .sir-prism-ribbon-two {animation-delay:-3.5s;transform:rotate(-28deg);opacity:.65;}
+        .hit-sir .sir-prism-shimmer {position:absolute;inset:0;background:repeating-linear-gradient(122deg,transparent 0px,transparent 23px,rgba(255,255,255,.045) 24px,transparent 26px);opacity:.7;mask-image:linear-gradient(90deg,#000,transparent 65%);}
+        .hit-sir .sir-prism-stars {position:absolute;inset:0;width:100%;height:100%;overflow:visible;}
+        .hit-sir .sir-prism-star {transform-box:fill-box;transform-origin:center;animation:sirStarTwinkle 3.6s ease-in-out infinite;}
+        .hit-sir .sir-prism-star-1,.hit-sir .sir-prism-star-4 {animation-delay:-1.2s;}.hit-sir .sir-prism-star-2,.hit-sir .sir-prism-star-5 {animation-delay:-2.4s;}
+        .hit-sir .badge-sir {background:linear-gradient(110deg,#fce7f3,#c4b5fd,#9ceaff,#fff1bd,#fbcfe8)!important;background-size:250% 250%!important;color:#191032!important;border:1px solid rgba(255,255,255,.8)!important;box-shadow:0 0 19px rgba(223,161,255,.55)!important;animation:sirBadgeFoil 6s ease-in-out infinite;}
+        .hit-sir .hit-content,.hit-sir .hit-layout {position:relative;z-index:3;}
+        /* MAR — external electric discharges crawl around the frame and fork inward. */
+        .hit-mar .mar-storm-system {position:absolute;inset:0;pointer-events:none;z-index:4;overflow:hidden;border-radius:inherit;}
+        .hit-mar .mar-storm-glow {position:absolute;inset:0;background:radial-gradient(ellipse at 4% 25%,rgba(0,174,255,.17),transparent 32%),radial-gradient(ellipse at 95% 76%,rgba(0,143,255,.18),transparent 35%);animation:marStormBreath 5.4s ease-in-out infinite;}
+        .hit-mar .mar-storm-lightning {position:absolute;inset:0;width:100%;height:100%;overflow:visible;}
+        .hit-mar .mar-discharge {fill:none;stroke-linejoin:round;stroke-linecap:round;opacity:0;animation:marElectricStrike 7.1s steps(1,end) infinite;}
+        .hit-mar .mar-discharge-1 {animation-delay:-.3s;}.hit-mar .mar-discharge-2 {animation-delay:-3.7s;}
+        .hit-mar .mar-discharge-3 {animation-delay:-5.1s;}.hit-mar .mar-discharge-4 {animation-delay:-2.1s;}
+        .hit-mar .mar-discharge-5 {animation-delay:-6.2s;}.hit-mar .mar-discharge-6 {animation-delay:-4.5s;}
+        .hit-mar .mar-arc-halo {stroke:#008dff;stroke-width:13;opacity:.9;}
+        .hit-mar .mar-arc-blue {stroke:#00bfff;stroke-width:5.3;filter:drop-shadow(0 0 5px #009dff);}
+        .hit-mar .mar-arc-core {stroke:#efffff;stroke-width:1.55;filter:drop-shadow(0 0 2px #fff);}
+        .hit-mar .hit-content,.hit-mar .hit-layout {position:relative;z-index:3;}
+        @keyframes marElectricStrike {0%,7%,10%,12%,14%,47%,50%,52%,100%{opacity:0}8%,9%,13%,48%,49%,51%{opacity:1}11%{opacity:.42}}
+        @keyframes sirFoilTurn {to{transform:rotate(360deg)}}
+        @keyframes sirFoilSweep {0%,100%{translate:-55% 0;opacity:.22}50%{translate:135% 0;opacity:.9}}
+        @keyframes sirStarTwinkle {0%,100%{opacity:.18;scale:.65}48%{opacity:1;scale:1.12}60%{opacity:.65;scale:1}}
+        @keyframes sirBadgeFoil {0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+        @keyframes marStormBreath {0%,100%{opacity:.35}50%{opacity:1}}
+        @keyframes marBoltFlicker {0%,8%,13%,25%,29%,65%,69%,100%{opacity:.05}9%,12%,26%,28%,66%,68%{opacity:1}10%,27%,67%{opacity:.45}}
+        @media (prefers-reduced-motion:reduce){.hit-sir .sir-prism-aura,.hit-sir .sir-prism-ribbon,.hit-sir .sir-prism-star,.hit-sir .badge-sir,.hit-mar .mar-discharge,.hit-mar .mar-storm-glow{animation:none!important;opacity:.65!important}}
+
+        /* Uniform minimum card height even when a hit has no break-number label. */
+        .hit-grid > .hit-card { min-height: 194px; }
+        .hit-grid > .hit-card .hit-layout { min-height: 156px; }
+        .stats-grid .stat-box.hit-future {
+          position: relative; isolation: isolate; overflow: hidden;
+          border: 1px solid rgba(65,228,255,.55) !important;
+          background: linear-gradient(125deg,#07182c,#101338 70%,#1a0d39) !important;
+          box-shadow: inset 0 0 22px rgba(47,208,255,.12),0 0 15px rgba(0,208,255,.12);
+        }
+        .stats-grid .stat-box.hit-future .rarity-fx {pointer-events:none}
+        .stats-grid .stat-box.hit-future .stat-label,
+        .stats-grid .stat-box.hit-future .stat-number {position:relative;z-index:2}
+                /* MAR CONSTRICTOR: permanent lightning mesh across the entire card.
+           Individual coils surge independently; none ever disappear. */
+        .hit-mar .mar-storm-system {
+          position: absolute; inset: 0; z-index: 4;
+          pointer-events: none; overflow: hidden; border-radius: inherit;
+        }
+        .hit-mar .mar-storm-lightning {
+          position: absolute; inset: 0; width: 100%; height: 100%;
+        }
+        .hit-mar .mar-storm-glow {
+          position: absolute; inset: 0;
+          background: radial-gradient(ellipse at 20% 40%,rgba(0,175,255,.19),transparent 60%),
+                      radial-gradient(ellipse at 80% 60%,rgba(0,175,255,.19),transparent 60%);
+          animation: marCoilAura 5s ease-in-out infinite alternate;
+        }
+        .hit-mar .mar-coil { opacity: .82; animation: marCoilPulse 5.1s ease-in-out infinite; }
+        .hit-mar .mar-coil:nth-of-type(2) {animation-duration:3.7s;animation-delay:-1.4s}
+        .hit-mar .mar-coil:nth-of-type(3) {animation-duration:4.3s;animation-delay:-2.2s}
+        .hit-mar .mar-coil:nth-of-type(4) {animation-duration:2.9s;animation-delay:-.8s}
+        .hit-mar .mar-coil:nth-of-type(5) {animation-duration:4.9s;animation-delay:-3.1s}
+        .hit-mar .mar-coil:nth-of-type(6) {animation-duration:3.3s;animation-delay:-1.9s}
+        .hit-mar .mar-coil:nth-of-type(7) {animation-duration:4.6s;animation-delay:-2.7s}
+        .hit-mar .mar-coil:nth-of-type(8) {animation-duration:3.9s;animation-delay:-.5s}
+        .hit-mar .mar-coil path { fill:none; stroke-linejoin:round; stroke-linecap:round; }
+        .hit-mar .mar-coil-bloom path {stroke:#00bfff;stroke-width:10;opacity:.9}
+        .hit-mar .mar-coil-electric path {stroke:#00caff;stroke-width:3.1;filter:drop-shadow(0 0 4px #00bfff)}
+        .hit-mar .mar-coil-white path {stroke:#ecfeff;stroke-width:1.15}
+        .hit-mar .mar-coil-white path:last-child {stroke-width:.8}
+        .hit-mar::before {opacity:.16!important;animation:none!important}
+        .hit-mar::after {opacity:.12!important;animation:none!important}
+        @keyframes marCoilPulse {
+          0%,100% {opacity:.76;filter:brightness(.94)}
+          17% {opacity:.93;filter:brightness(1.22)}
+          19% {opacity:.81;filter:brightness(1)}
+          21% {opacity:1;filter:brightness(1.9)}
+          23% {opacity:.8;filter:brightness(1)}
+          58% {opacity:.88;filter:brightness(1.1)}
+          61% {opacity:1;filter:brightness(1.65)}
+          64% {opacity:.77;filter:brightness(.96)}
+        }
+        @keyframes marCoilAura {
+          from {opacity:.6} to {opacity:1}
+        }
+        @media (prefers-reduced-motion:reduce) {
+          .hit-mar .mar-coil,.hit-mar .mar-storm-glow {animation:none!important;opacity:.86!important}
+        }
+
       `}</style>
 
       <div className="wrap">
@@ -6503,7 +6716,7 @@ function MessageCard() {
                 ) : (
                   <div className="showcase-hit-card hit-default">
                     <div className="hit-content">
-                      <h3>No MAR+ pulls yet</h3>
+                      <h3>No featured rarity pulls yet</h3>
                       <div className="showcase-hit-date">
                         Your best pulls will appear here automatically.
                       </div>
@@ -6532,10 +6745,28 @@ function MessageCard() {
                 <div className="stat-number">{counts.gold}</div>
               </div>
 
+              <div className="stat-box hit-future">
+                <RarityEffects tier="future" />
+                <div className="stat-label">Future</div>
+                <div className="stat-number">{counts.future}</div>
+              </div>
+
               <div className="stat-box hit-mar">
                 <RarityEffects tier="mar" />
                 <div className="stat-label">MAR</div>
                 <div className="stat-number">{counts.mar}</div>
+              </div>
+
+              <div className="stat-box hit-clc lifetime-clc-stat">
+                <div className="clc-vintage-film" aria-hidden="true">
+                  <span className="clc-paper-texture" />
+                  <span className="clc-film-grain" />
+                  <span className="clc-film-vignette" />
+                  <span className="clc-film-line clc-film-line-a" />
+                  <span className="clc-film-line clc-film-line-b" />
+                </div>
+                <div className="stat-label">CLC</div>
+                <div className="stat-number">{counts.clc}</div>
               </div>
 
               <div className="stat-box hit-ir">
@@ -6556,17 +6787,6 @@ function MessageCard() {
                 <div className="stat-number">{counts.ex}</div>
               </div>
 
-              <div className="stat-box hit-clc lifetime-clc-stat">
-                <div className="clc-vintage-film" aria-hidden="true">
-                  <span className="clc-paper-texture" />
-                  <span className="clc-film-grain" />
-                  <span className="clc-film-vignette" />
-                  <span className="clc-film-line clc-film-line-a" />
-                  <span className="clc-film-line clc-film-line-b" />
-                </div>
-                <div className="stat-label">CLC</div>
-                <div className="stat-number">{counts.clc}</div>
-              </div>
             </div>
           </section>
         )}

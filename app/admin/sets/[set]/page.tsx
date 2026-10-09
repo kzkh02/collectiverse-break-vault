@@ -148,7 +148,7 @@ function safePath(value: string) {
 function cleanDisplayCardName(value: string) {
   return String(value || '')
     .replace(/^[^\p{L}\p{N}'’]+/u, '')
-    .replace(/\s+\((?:SIR|IR|SR|MAR|Gold|EX)\)\s*$/i, '')
+    .replace(/\s+\((?:SIR|IR|SR|MAR|Future|Gold|EX)\)\s*$/i, '')
     .trim()
 }
 
@@ -320,7 +320,7 @@ function parseSpotVariants(spotName: string): CardVariant[] {
 
   // A lone rarity in brackets is metadata, not part of the card's image name.
   // e.g. "Erika's Invitation (SIR)" -> "Erika's Invitation".
-  if (/^(SIR|IR|SR|MAR|Gold|EX)$/i.test(inside)) {
+  if (/^(SIR|IR|SR|MAR|Future|Gold|EX)$/i.test(inside)) {
     return [{
       spotName: clean,
       baseName,

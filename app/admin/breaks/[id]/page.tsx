@@ -7,7 +7,7 @@ import { supabase } from '../../../../lib/supabase'
 
 type FilterMode = 'all' | 'hits' | 'not_hits' | 'featured'
 
-type TierId = '' | 'reverse_holo' | 'ex' | 'sr' | 'ir' | 'mar' | 'gold' | 'sir' | 'clc'
+type TierId = '' | 'reverse_holo' | 'ex' | 'sr' | 'ir' | 'mar' | 'future' | 'gold' | 'sir' | 'clc'
 
 type EntryRow = {
   id: string
@@ -37,6 +37,7 @@ const tiers: { id: TierId; label: string; emoji: string }[] = [
   { id: 'ir', label: 'IR', emoji: '⭐' },
   { id: 'mar', label: 'MAR', emoji: '🌌' },
   { id: 'gold', label: 'Gold', emoji: '🥇' },
+  { id: 'future', label: 'Future', emoji: '⚡' },
   { id: 'sir', label: 'SIR', emoji: '👑' },
   { id: 'clc', label: 'CLC', emoji: '🏆' },
 ]
@@ -1088,6 +1089,7 @@ export default function BreakPage() {
 
         .tier-sir { border-color: rgba(255,255,255,.38); box-shadow: 0 0 22px rgba(250,204,21,.18); }
         .tier-clc { border-color: rgba(212,175,55,.78); box-shadow: 0 0 22px rgba(212,175,55,.24); }
+        .tier-future { border-color: rgba(34,211,238,.65); background: linear-gradient(135deg,rgba(8,47,73,.38),rgba(88,28,135,.25)); box-shadow: 0 0 22px rgba(34,211,238,.22); }
         .tier-gold { border-color: rgba(250,204,21,.48); box-shadow: 0 0 22px rgba(250,204,21,.16); }
         .tier-mar { border-color: rgba(56,189,248,.42); }
         .tier-ir { border-color: rgba(251,113,133,.42); }

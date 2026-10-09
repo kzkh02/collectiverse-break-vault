@@ -11,6 +11,7 @@ function getTierClass(tier: string | null) {
     case 'clc': return 'hit-clc'
     case 'sir': return 'hit-sir'
     case 'gold': return 'hit-gold'
+    case 'future': return 'hit-future'
     case 'mar': return 'hit-mar'
     case 'ir': return 'hit-ir'
     case 'sr': return 'hit-sr'
@@ -29,6 +30,8 @@ function getTierStyle(tier: string | null) {
       return { label: 'SIR', className: 'tier-sir', color: '#facc15' }
     case 'gold':
       return { label: 'GOLD', className: 'tier-gold', color: '#facc15' }
+    case 'future':
+      return { label: 'FUTURE', className: 'tier-future', color: '#22d3ee' }
     case 'mar':
       return { label: 'MAR', className: 'tier-mar', color: '#38bdf8' }
     case 'ir':
@@ -110,7 +113,7 @@ function resolveHitImage(
   const setKey = normaliseImageKey(setName)
   const tierLabel = getTierStyle(tier).label
   const cleanBase = canonicalImageName(rawName)
-    .replace(/\s+(sir|gold|mar|ir|sr|ex|clc)$/i, '')
+    .replace(/\s+(sir|gold|future|mar|ir|sr|ex|clc)$/i, '')
     .trim()
   let cleanTier = canonicalImageName(tierLabel)
 
@@ -150,7 +153,7 @@ function resolveHitImage(
     // Legacy split-card images were uploaded as e.g. "Salazzle (IR)".
     // canonicalImageName intentionally strips "(IR)", so explicitly recognise
     // that old format ONLY when the bracketed tier matches the current hit tier.
-    const legacyBracketTier = String(rowCard).match(/\((SIR|GOLD|MAR|IR|SR|EX|CLC)\)\s*$/i)?.[1] || ''
+    const legacyBracketTier = String(rowCard).match(/\((SIR|GOLD|FUTURE|MAR|IR|SR|EX|CLC)\)\s*$/i)?.[1] || ''
     if (
       cleanTier &&
       canonicalImageName(legacyBracketTier) === cleanTier &&
@@ -174,7 +177,7 @@ function baseCardName(value: string) {
 }
 
 function cardVariantName(value: string, tier: string | null) {
-  const labels: Record<string, string> = { sir: 'SIR', gold: 'GOLD', mar: 'MAR', ir: 'IR', sr: 'SR', ex: 'EX' }
+  const labels: Record<string, string> = { sir: 'SIR', gold: 'GOLD', future: 'FUTURE', mar: 'MAR', ir: 'IR', sr: 'SR', ex: 'EX' }
   const base = baseCardName(value)
   const label = labels[String(tier || '').toLowerCase()] || String(tier || '').replace(/_/g, ' ').toUpperCase()
   return tier ? `${base} ${label}`.trim() : base
@@ -211,6 +214,26 @@ function RarityEffects({ tier }: { tier: string }) {
         <span className="fx-extra" />
         <span className="fx-flare" />
       
+        {tier === 'future' && (
+          <div className="future-interface">
+            <span className="future-grid" />
+            <span className="future-scan" />
+            <span className="future-corner future-corner-tl" />
+            <span className="future-corner future-corner-tr" />
+            <span className="future-corner future-corner-bl" />
+            <span className="future-corner future-corner-br" />
+            <span className="future-circuit future-circuit-a" />
+            <span className="future-circuit future-circuit-b" />
+            <span className="future-pulse" />
+            <span className="future-orbit future-orbit-one" />
+            <span className="future-orbit future-orbit-two" />
+            <span className="future-data future-data-top" />
+            <span className="future-data future-data-bottom" />
+            <span className="future-node future-node-a" />
+            <span className="future-node future-node-b" />
+          </div>
+        )}
+
         {tier === 'ir' && (
           <svg className="ir-spectral-field" viewBox="0 0 1000 260" preserveAspectRatio="none">
             <defs>
@@ -262,82 +285,58 @@ function RarityEffects({ tier }: { tier: string }) {
         )}
       
         {tier === 'sir' && (
-          <>
-            <div className="sir-flash-system">
-              <span className="sir-starburst sir-starburst-1" />
-              <span className="sir-starburst sir-starburst-2" />
-              <span className="sir-rainbow-ring" />
-            </div>
-      
-            <svg className="sir-fracture-system" viewBox="0 0 1000 260" preserveAspectRatio="none">
+          <div className="sir-prismatic-system">
+            <div className="sir-prism-aura" />
+            <div className="sir-prism-ribbon sir-prism-ribbon-one" />
+            <div className="sir-prism-ribbon sir-prism-ribbon-two" />
+            <div className="sir-prism-shimmer" />
+            <svg className="sir-prism-stars" viewBox="0 0 1000 260" preserveAspectRatio="none">
               <defs>
-                <linearGradient id="sirFractureGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#ffffff" />
-                  <stop offset="24%" stopColor="#67e8f9" />
-                  <stop offset="52%" stopColor="#c4b5fd" />
-                  <stop offset="76%" stopColor="#f0abfc" />
-                  <stop offset="100%" stopColor="#ffffff" />
-                </linearGradient>
-                <filter id="sirFractureGlow" x="-40%" y="-80%" width="180%" height="260%">
-                  <feGaussianBlur stdDeviation="3.5" result="blur" />
-                  <feMerge>
-                    <feMergeNode in="blur" />
-                    <feMergeNode in="SourceGraphic" />
-                  </feMerge>
+                <radialGradient id="sirPrismStar"><stop stopColor="#fff"/><stop offset=".24" stopColor="#fff" stopOpacity=".95"/><stop offset="1" stopColor="#c4b5fd" stopOpacity="0"/></radialGradient>
+              </defs>
+              {[[75,42,11],[220,206,7],[364,35,9],[535,219,12],[700,48,8],[890,192,11],[956,37,7]].map(([x,y,r],i)=>(
+                <g key={i} className={`sir-prism-star sir-prism-star-${i}`}>
+                  <circle cx={x} cy={y} r={r*2.5} fill="url(#sirPrismStar)" />
+                  <path d={`M${x-r*2} ${y} H${x+r*2} M${x} ${y-r*2} V${y+r*2}`} stroke="#fff" strokeWidth="1.4" strokeLinecap="round" />
+                </g>
+              ))}
+            </svg>
+          </div>
+        )}
+
+        {tier === 'mar' && (
+          <div className="mar-storm-system">
+            <div className="mar-storm-glow" />
+            <svg className="mar-storm-lightning mar-constrictor" viewBox="0 0 1000 260" preserveAspectRatio="none" aria-hidden="true">
+              <defs>
+                <filter id="marConstrictorBloom" x="-35%" y="-100%" width="170%" height="300%">
+                  <feGaussianBlur stdDeviation="4.5" />
                 </filter>
               </defs>
-      
-              <g className="sir-fracture-glow" filter="url(#sirFractureGlow)">
-                <path className="sir-crack sir-crack-main" pathLength="1" stroke="url(#sirFractureGradient)"
-                  d="M505 126 L458 96 L421 108 L374 74 L330 88 L284 48 L238 61 L191 30" />
-                <path className="sir-crack sir-crack-main sir-crack-right" pathLength="1" stroke="url(#sirFractureGradient)"
-                  d="M505 126 L554 103 L598 117 L646 80 L692 96 L738 55 L786 69 L837 36" />
-                <path className="sir-crack sir-crack-down" pathLength="1" stroke="url(#sirFractureGradient)"
-                  d="M505 126 L482 158 L501 181 L470 207 L486 232 L458 269" />
-                <path className="sir-crack sir-crack-up" pathLength="1" stroke="url(#sirFractureGradient)"
-                  d="M505 126 L524 92 L510 67 L539 41 L525 17 L548 -10" />
-      
-                <path className="sir-crack sir-crack-branch branch-one" pathLength="1" stroke="url(#sirFractureGradient)"
-                  d="M374 74 L385 42 L367 20" />
-                <path className="sir-crack sir-crack-branch branch-two" pathLength="1" stroke="url(#sirFractureGradient)"
-                  d="M284 48 L267 83 L239 103" />
-                <path className="sir-crack sir-crack-branch branch-three" pathLength="1" stroke="url(#sirFractureGradient)"
-                  d="M646 80 L630 47 L650 23" />
-                <path className="sir-crack sir-crack-branch branch-four" pathLength="1" stroke="url(#sirFractureGradient)"
-                  d="M738 55 L758 92 L790 109" />
-                <path className="sir-crack sir-crack-branch branch-five" pathLength="1" stroke="url(#sirFractureGradient)"
-                  d="M470 207 L433 196 L408 216" />
-                <path className="sir-crack sir-crack-branch branch-six" pathLength="1" stroke="url(#sirFractureGradient)"
-                  d="M539 41 L574 54 L601 35" />
-              </g>
-      
-              <circle className="sir-fracture-core" cx="505" cy="126" r="5" />
+              {[
+                { d: 'M-45 30 L18 17 48 37 78 22 113 45 147 27 184 51 221 36 258 60 295 43 333 66 370 50 409 74 447 56 486 78 523 61 563 82 602 66 644 90 683 72 723 97 763 79 805 103 846 85 886 109 927 91 966 115 1045 93', branch: 'M154 115 L142 84 160 64 M477 173 L489 204 512 217 M803 175 L819 146 841 137' },
+                { d: 'M1045 152 L988 168 955 145 919 173 885 153 849 182 815 161 781 190 747 170 712 198 678 178 644 208 608 185 572 217 536 195 501 224 466 202 430 231 395 208 358 238 321 216 285 245 250 223 214 251 178 228 142 253 108 228 73 246 37 221 -45 245', branch: 'M285 245 L275 212 293 190 M644 208 L659 236 683 252' },
+                { d: 'M-36 120 L19 100 51 129 86 107 119 138 154 115 189 145 225 122 259 152 294 130 331 160 368 136 404 167 442 142 477 173 515 149 550 179 587 155 624 187 660 163 696 192 731 169 768 197 803 175 838 201 875 180 910 204 946 184 981 208 1040 189', branch: 'M225 122 L207 95 215 71 M696 192 L708 222 731 233' },
+                { d: 'M70 -35 L54 17 83 41 64 74 96 102 77 135 109 166 92 199 123 233 104 291', branch: 'M96 102 L128 108 149 125 M92 199 L61 212 45 239' },
+                { d: 'M335 -35 L315 8 343 34 321 64 350 91 328 119 360 148 336 177 367 205 345 235 373 291', branch: 'M350 91 L382 83 405 60 M367 205 L397 218 417 241' },
+                { d: 'M681 -35 L659 10 688 37 667 67 697 94 674 122 704 150 682 180 712 208 690 237 718 291', branch: 'M697 94 L729 87 749 64 M682 180 L650 189 634 216' },
+                { d: 'M963 -35 L943 16 973 45 949 77 979 108 952 139 981 171 957 201 987 231 966 291', branch: 'M979 108 L942 118 918 139 M957 201 L925 215 906 242' },
+                { d: 'M-40 64 L12 78 39 63 69 88 100 70 131 96 163 79 194 105 226 88 259 114 290 98 324 123 355 106 388 132 420 115 453 141 487 125 520 151 553 135 587 160 620 144 653 171 687 155 721 181 755 165 790 192 824 176 858 202 892 185 927 212 961 194 1040 222', branch: 'M324 123 L338 94 361 82 M755 165 L743 136 761 112' },
+              ].map((arc, index) => (
+                <g key={index} className={`mar-coil mar-coil-${index + 1}`}>
+                  <g className="mar-coil-bloom" filter="url(#marConstrictorBloom)">
+                    <path d={arc.d} /><path d={arc.branch} />
+                  </g>
+                  <g className="mar-coil-electric">
+                    <path d={arc.d} /><path d={arc.branch} />
+                  </g>
+                  <g className="mar-coil-white">
+                    <path d={arc.d} /><path d={arc.branch} />
+                  </g>
+                </g>
+              ))}
             </svg>
-          </>
-        )}
-      
-        {tier === 'mar' && (
-          <svg className="mar-electric-field" viewBox="0 0 1000 260" preserveAspectRatio="none">
-            <defs>
-              <filter id="marElectricGlow" x="-40%" y="-80%" width="180%" height="260%">
-                <feGaussianBlur stdDeviation="4" result="blur" />
-                <feMerge>
-                  <feMergeNode in="blur" />
-                  <feMergeNode in="SourceGraphic" />
-                </feMerge>
-              </filter>
-            </defs>
-            <g filter="url(#marElectricGlow)">
-              <path className="electric-arc arc-a" d="M-20 52 L55 43 L91 61 L137 31 L185 55 L231 42 L278 66 L329 34 L377 54 L423 28 L469 51 L518 37 L566 62 L616 39 L662 55 L713 30 L760 52 L810 38 L857 60 L906 34 L1020 51" />
-              <path className="electric-arc arc-b" d="M18 211 L77 191 L121 213 L168 184 L213 205 L260 178 L307 207 L352 187 L398 214 L445 181 L492 203 L539 179 L586 208 L634 185 L681 211 L728 181 L775 204 L824 180 L873 207 L922 185 L1018 210" />
-              <path className="electric-arc arc-c" d="M55 -12 L76 29 L62 55 L91 79 L73 108 L101 133 L79 160 L108 188 L87 214 L113 272" />
-              <path className="electric-arc arc-d" d="M913 -12 L888 27 L906 54 L879 81 L899 109 L870 136 L892 164 L864 191 L886 219 L858 272" />
-              <path className="electric-branch branch-a" d="M278 66 L255 92 L268 109 L244 132" />
-              <path className="electric-branch branch-b" d="M713 30 L733 63 L719 81 L744 105" />
-              <path className="electric-branch branch-c" d="M398 214 L420 190 L411 171 L437 148" />
-              <path className="electric-branch branch-d" d="M870 136 L835 124 L817 143 L788 132" />
-            </g>
-          </svg>
+          </div>
         )}
       </div>
     )
@@ -2180,6 +2179,7 @@ function ArchiveFeaturedStyles() {
 .archive-featured-exact .hit-mar{ --tier-accent: 34, 211, 238; --tier-accent-2: 96, 165, 250; }
 
         
+.archive-featured-exact .hit-future{ --tier-accent: 34, 211, 238; --tier-accent-2: 167, 139, 250; }
 .archive-featured-exact .hit-gold{ --tier-accent: 212, 175, 55; --tier-accent-2: 250, 204, 21; }
 
         
@@ -6587,6 +6587,1711 @@ function ArchiveFeaturedStyles() {
           50% { opacity:.96; }
         }
 
+
+/* SYNCED COLLECTORS RARITY EFFECTS: SIR, GOLD, FUTURE, MAR + badges */
+.archive-featured-exact .badge-sir {
+          background: linear-gradient(135deg, #ff004c, #ffb000, #fff700, #00f0ff, #8b5cf6);
+          color: #160018;
+          border: 1px solid rgba(255,255,255,.65);
+          box-shadow: 0 0 24px rgba(255,176,0,.75), 0 0 38px rgba(168,85,247,.4);
+        }
+.archive-featured-exact .badge-mar {
+          background: linear-gradient(135deg, #e0f2fe, #38bdf8, #8b5cf6);
+          color: #02111f;
+          border: 1px solid rgba(255,255,255,.55);
+          box-shadow: 0 0 20px rgba(56,189,248,.7), inset 0 1px 0 rgba(255,255,255,.75);
+        }
+.archive-featured-exact .hit-mar {
+          border: 2px solid rgba(56,189,248,.78);
+          background: radial-gradient(circle at 18% 28%, rgba(255,255,255,.18), transparent 24%), radial-gradient(circle at 82% 72%, rgba(56,189,248,.16), transparent 28%), rgba(255,255,255,.08);
+          box-shadow: 0 0 36px rgba(56,189,248,.46), 0 0 74px rgba(14,165,233,.22), inset 0 0 34px rgba(56,189,248,.10);
+          animation: marCosmicFloat 2.4s ease-in-out infinite;
+        }
+.archive-featured-exact .hit-mar::before {
+          background: radial-gradient(circle at 25% 35%, rgba(255,255,255,.8) 0 1px, transparent 2px), radial-gradient(circle at 70% 25%, rgba(255,255,255,.7) 0 1px, transparent 2px), radial-gradient(circle at 82% 78%, rgba(255,255,255,.65) 0 1px, transparent 2px), linear-gradient(135deg, rgba(56,189,248,.45), rgba(168,85,247,.18));
+          animation: starTwinkle 2.1s ease-in-out infinite;
+        }
+.archive-featured-exact .hit-mar::after {
+          background: linear-gradient(90deg, transparent, rgba(125,211,252,.78), rgba(255,255,255,.5), transparent);
+          animation: fastSweep 2.5s infinite;
+        }
+.archive-featured-exact .hit-future { border-color: rgba(34,211,238,.75); background: linear-gradient(145deg,rgba(8,47,73,.7),rgba(76,29,149,.38)); box-shadow: 0 0 24px rgba(34,211,238,.22); }
+.archive-featured-exact .hit-sir {
+          border: 2px solid rgba(255,255,255,.42);
+          background: radial-gradient(circle at top left, rgba(255,255,255,.18), transparent 28%), linear-gradient(135deg, rgba(255,0,76,.15), rgba(255,176,0,.12), rgba(0,240,255,.1), rgba(139,92,246,.16));
+          box-shadow: 0 0 32px rgba(255,176,0,.38), 0 0 62px rgba(168,85,247,.26), 0 0 84px rgba(34,211,238,.18), inset 0 0 36px rgba(255,255,255,.07);
+          animation: sirLegendaryFloat 1.8s ease-in-out infinite;
+        }
+.archive-featured-exact .hit-sir::before {
+          background: linear-gradient(120deg, rgba(255,0,76,.48), rgba(255,176,0,.48), rgba(255,247,0,.36), rgba(0,240,255,.36), rgba(139,92,246,.48), rgba(255,0,76,.48));
+          animation: rainbowBorder 3.2s linear infinite;
+        }
+.archive-featured-exact .hit-sir::after {
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,.78), rgba(255,176,0,.48), transparent);
+          animation: sirSweep 2.4s infinite;
+        }
+.archive-featured-exact .hit-mar { --tier-accent: 34, 211, 238; --tier-accent-2: 96, 165, 250; }
+.archive-featured-exact .hit-sir { --tier-accent: 167, 139, 250; --tier-accent-2: 34, 211, 238; }
+.archive-featured-exact .hit-mar::before {
+          background:
+            linear-gradient(116deg,
+              transparent 0 43%,
+              rgba(125,211,252,0) 44%,
+              rgba(224,242,254,.92) 44.6%,
+              rgba(34,211,238,.58) 45.1%,
+              transparent 45.8% 49%,
+              rgba(186,230,253,.70) 49.4%,
+              transparent 50.1%),
+            radial-gradient(circle at 68% 48%, rgba(34,211,238,.10), transparent 27%) !important;
+          background-size: 220% 100%, 100% 100% !important;
+          animation: marLightning 5.6s steps(1,end) infinite !important;
+        }
+.archive-featured-exact .hit-mar::after {
+          opacity: .18 !important;
+          background: linear-gradient(90deg, transparent, rgba(34,211,238,.22), transparent) !important;
+          animation: marCharge 5.6s ease-in-out infinite !important;
+        }
+.archive-featured-exact .hit-sir::before {
+          background:
+            linear-gradient(
+              118deg,
+              transparent 15%,
+              rgba(244,114,182,.08) 28%,
+              rgba(250,204,21,.07) 38%,
+              rgba(34,211,238,.10) 50%,
+              rgba(167,139,250,.11) 61%,
+              transparent 76%
+            ),
+            radial-gradient(circle at 70% 35%, rgba(255,255,255,.07), transparent 25%) !important;
+          background-size: 190% 100%, 100% 100% !important;
+          animation: sirPrism 7.2s ease-in-out infinite !important;
+        }
+.archive-featured-exact .hit-sir::after {
+          opacity: .30 !important;
+          background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(255,255,255,.06),
+            rgba(34,211,238,.18),
+            rgba(244,114,182,.16),
+            rgba(255,255,255,.22),
+            transparent
+          ) !important;
+          animation: sirGlint 6.4s ease-in-out infinite !important;
+        }
+.archive-featured-exact .hit-mar::before {
+          top: -18% !important;
+          left: 58% !important;
+          right: auto !important;
+          bottom: auto !important;
+          width: 18% !important;
+          height: 145% !important;
+          opacity: 0 !important;
+          background: linear-gradient(
+            180deg,
+            rgba(255,255,255,.98),
+            rgba(125,211,252,.96) 38%,
+            rgba(34,211,238,.82) 70%,
+            rgba(255,255,255,.94)
+          ) !important;
+          clip-path: polygon(
+            48% 0,
+            70% 0,
+            57% 30%,
+            78% 30%,
+            43% 60%,
+            62% 60%,
+            20% 100%,
+            35% 66%,
+            14% 66%,
+            43% 36%,
+            27% 36%
+          );
+          filter:
+            drop-shadow(0 0 4px rgba(255,255,255,.95))
+            drop-shadow(0 0 12px rgba(34,211,238,.95))
+            drop-shadow(0 0 22px rgba(14,165,233,.62));
+          transform: rotate(9deg) scale(.82);
+          animation: marBolt 4.6s steps(1,end) infinite !important;
+        }
+.archive-featured-exact .hit-mar::after {
+          inset: 0 !important;
+          width: auto !important;
+          height: auto !important;
+          left: 0 !important;
+          opacity: 0 !important;
+          transform: none !important;
+          background:
+            radial-gradient(circle at 68% 48%, rgba(224,242,254,.30), transparent 16%),
+            linear-gradient(90deg, transparent, rgba(34,211,238,.10), transparent) !important;
+          animation: marFlash 4.6s steps(1,end) infinite !important;
+        }
+.archive-featured-exact .hit-sir::before {
+          inset: -55% !important;
+          width: auto !important;
+          height: auto !important;
+          left: -55% !important;
+          opacity: .34 !important;
+          background: conic-gradient(
+            from 0deg,
+            transparent 0deg,
+            rgba(34,211,238,.28) 52deg,
+            rgba(167,139,250,.32) 108deg,
+            rgba(244,114,182,.26) 162deg,
+            rgba(250,204,21,.18) 214deg,
+            rgba(34,211,238,.24) 278deg,
+            transparent 335deg
+          ) !important;
+          filter: blur(22px);
+          transform: rotate(0deg);
+          animation: sirHoloRotate 8s linear infinite !important;
+        }
+.archive-featured-exact .hit-sir::after {
+          left: -30% !important;
+          width: 16% !important;
+          opacity: 0 !important;
+          background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(255,255,255,.10),
+            rgba(255,255,255,.55),
+            rgba(34,211,238,.18),
+            rgba(244,114,182,.18),
+            transparent
+          ) !important;
+          animation: sirHoloSweep 4.9s ease-in-out infinite !important;
+        }
+.archive-featured-exact .rarity-fx {
+          position: absolute;
+          inset: 0;
+          z-index: 1;
+          overflow: hidden;
+          border-radius: inherit;
+          pointer-events: none;
+        }
+.archive-featured-exact .rarity-fx > span {
+          position: absolute;
+          display: block;
+          pointer-events: none;
+        }
+.archive-featured-exact .hit-mar .fx-ambient {
+          inset: 0;
+          opacity: 0;
+          background:
+            radial-gradient(circle at 70% 48%, rgba(224,242,254,.42), transparent 18%),
+            radial-gradient(circle at 65% 48%, rgba(34,211,238,.20), transparent 35%);
+          animation: fxMarFlash 4.2s steps(1,end) infinite;
+        }
+.archive-featured-exact .hit-mar .fx-primary {
+          top: -16%;
+          left: 65%;
+          width: 14%;
+          height: 140%;
+          opacity: 0;
+          background: linear-gradient(180deg, #fff, #bae6fd 34%, #22d3ee 72%, #fff);
+          clip-path: polygon(
+            46% 0, 68% 0, 56% 28%, 78% 28%,
+            45% 57%, 64% 57%, 19% 100%,
+            35% 65%, 14% 65%, 42% 35%, 27% 35%
+          );
+          filter:
+            drop-shadow(0 0 4px #fff)
+            drop-shadow(0 0 11px rgba(34,211,238,1))
+            drop-shadow(0 0 25px rgba(14,165,233,.9));
+          animation: fxMarBolt 4.2s steps(1,end) infinite;
+        }
+.archive-featured-exact .hit-mar .fx-secondary {
+          top: 18%;
+          left: 48%;
+          width: 9%;
+          height: 78%;
+          opacity: 0;
+          transform: rotate(-17deg);
+          background: linear-gradient(180deg, #fff, #67e8f9, #fff);
+          clip-path: polygon(45% 0, 68% 0, 55% 39%, 78% 39%, 23% 100%, 39% 55%, 18% 55%);
+          filter: drop-shadow(0 0 9px rgba(34,211,238,.95));
+          animation: fxMarBoltSmall 4.2s steps(1,end) infinite;
+        }
+.archive-featured-exact .hit-sir .fx-ambient {
+          inset: -80%;
+          opacity: .52;
+          background: conic-gradient(
+            from 0deg,
+            transparent 0deg,
+            rgba(34,211,238,.34) 50deg,
+            rgba(167,139,250,.42) 105deg,
+            rgba(244,114,182,.34) 165deg,
+            rgba(250,204,21,.22) 220deg,
+            rgba(34,211,238,.32) 285deg,
+            transparent 340deg
+          );
+          filter: blur(26px);
+          animation: fxSirRotate 7s linear infinite;
+        }
+.archive-featured-exact .hit-sir .fx-primary {
+          top: -20%;
+          bottom: -20%;
+          left: -28%;
+          width: 18%;
+          transform: rotate(12deg);
+          background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(255,255,255,.08),
+            rgba(255,255,255,.72),
+            rgba(34,211,238,.28),
+            rgba(244,114,182,.24),
+            transparent
+          );
+          animation: fxSirSweep 4.5s ease-in-out infinite;
+        }
+.archive-featured-exact .hit-sir .fx-secondary {
+          inset: 0;
+          background:
+            linear-gradient(120deg,
+              transparent 15%,
+              rgba(34,211,238,.08) 35%,
+              rgba(167,139,250,.10) 48%,
+              rgba(244,114,182,.08) 62%,
+              transparent 80%);
+          background-size: 220% 100%;
+          animation: fxSirFilm 5.5s ease-in-out infinite;
+        }
+.archive-featured-exact .hit-mar {
+          animation: fxMarBorder 3.4s ease-in-out infinite !important;
+        }
+.archive-featured-exact .hit-mar .fx-ambient {
+          background:
+            radial-gradient(circle at 70% 48%, rgba(224,242,254,.48), transparent 17%),
+            radial-gradient(circle at 65% 48%, rgba(34,211,238,.22), transparent 34%),
+            linear-gradient(115deg, transparent 0 42%, rgba(34,211,238,.06) 50%, transparent 58%);
+          background-size: 100% 100%, 100% 100%, 180% 100%;
+          animation: fxMarStorm 4.2s steps(1,end) infinite;
+        }
+.archive-featured-exact .hit-mar .fx-detail {
+          top: -10%;
+          left: 34%;
+          width: 8%;
+          height: 115%;
+          opacity: 0;
+          transform: rotate(18deg);
+          background: linear-gradient(180deg, #fff, #67e8f9 50%, #fff);
+          clip-path: polygon(
+            43% 0, 66% 0, 54% 25%, 77% 25%,
+            45% 51%, 66% 51%, 18% 100%,
+            36% 59%, 15% 59%, 41% 32%, 25% 32%
+          );
+          filter:
+            drop-shadow(0 0 4px rgba(255,255,255,1))
+            drop-shadow(0 0 10px rgba(34,211,238,.95));
+          animation: fxMarBranch 4.2s steps(1,end) infinite;
+        }
+.archive-featured-exact .hit-sir {
+          animation: fxSirBorder 3.6s ease-in-out infinite !important;
+        }
+.archive-featured-exact .hit-sir .fx-ambient {
+          inset: -65%;
+          opacity: .68;
+          background: conic-gradient(
+            from 0deg,
+            transparent 0deg,
+            rgba(34,211,238,.40) 46deg,
+            rgba(99,102,241,.34) 86deg,
+            rgba(167,139,250,.46) 125deg,
+            rgba(244,114,182,.40) 168deg,
+            rgba(250,204,21,.26) 214deg,
+            rgba(52,211,153,.20) 254deg,
+            rgba(34,211,238,.38) 302deg,
+            transparent 344deg
+          );
+          filter: blur(24px);
+          animation: fxSirRotateV2 6.5s linear infinite;
+        }
+.archive-featured-exact .hit-sir .fx-secondary {
+          inset: 0;
+          opacity: .64;
+          background:
+            linear-gradient(
+              112deg,
+              transparent 8%,
+              rgba(34,211,238,.13) 28%,
+              transparent 39%,
+              rgba(167,139,250,.16) 51%,
+              transparent 62%,
+              rgba(244,114,182,.13) 76%,
+              transparent 91%
+            );
+          background-size: 240% 100%;
+          animation: fxSirRays 4.8s ease-in-out infinite;
+        }
+.archive-featured-exact .hit-sir .fx-detail {
+          inset: 0;
+          opacity: .62;
+          background-image:
+            radial-gradient(circle, rgba(255,255,255,.88) 0 .9px, transparent 1.7px),
+            radial-gradient(circle, rgba(103,232,249,.72) 0 1.1px, transparent 1.8px),
+            radial-gradient(circle, rgba(244,114,182,.62) 0 .9px, transparent 1.6px);
+          background-size: 49px 49px, 73px 73px, 97px 97px;
+          background-position: 7px 13px, 38px 2px, 19px 39px;
+          animation: fxSirParticles 7s linear infinite;
+        }
+.archive-featured-exact .hit-mar {
+          border-color: rgba(103,232,249,.48) !important;
+          animation: marChargedEdge 2.1s ease-in-out infinite !important;
+        }
+.archive-featured-exact .hit-mar .fx-ambient {
+          inset: 0;
+          opacity: .72 !important;
+          background:
+            radial-gradient(circle at 18% 18%, rgba(34,211,238,.13), transparent 22%),
+            radial-gradient(circle at 82% 78%, rgba(59,130,246,.12), transparent 25%),
+            linear-gradient(115deg, transparent 0 40%, rgba(34,211,238,.045) 50%, transparent 60%);
+          background-size: 100% 100%, 100% 100%, 190% 100%;
+          animation: marStormDrift 4s linear infinite !important;
+        }
+.archive-featured-exact .hit-mar .fx-primary {
+          top: -12% !important;
+          left: 6% !important;
+          width: 92% !important;
+          height: 122% !important;
+          opacity: .78 !important;
+          transform: none !important;
+          background: none !important;
+          filter: none !important;
+          animation: marArcFlickerA 1.35s steps(1,end) infinite !important;
+        }
+.archive-featured-exact .hit-mar .fx-primary::before,
+.archive-featured-exact .hit-mar .fx-primary::after,
+.archive-featured-exact .hit-mar .fx-secondary::before,
+.archive-featured-exact .hit-mar .fx-secondary::after,
+.archive-featured-exact .hit-mar .fx-extra::before,
+.archive-featured-exact .hit-mar .fx-extra::after {
+          content: "";
+          position: absolute;
+          pointer-events: none;
+          background: linear-gradient(90deg, transparent, #e0f2fe 12%, #67e8f9 50%, #ffffff 82%, transparent);
+          height: 2px;
+          border-radius: 999px;
+          filter:
+            drop-shadow(0 0 2px rgba(255,255,255,.95))
+            drop-shadow(0 0 5px rgba(34,211,238,.95))
+            drop-shadow(0 0 10px rgba(14,165,233,.65));
+        }
+.archive-featured-exact .hit-mar .fx-primary::before {
+          width: 64%;
+          top: 18%;
+          left: 2%;
+          transform: rotate(8deg);
+          clip-path: polygon(0 40%, 14% 0, 25% 65%, 39% 18%, 52% 82%, 67% 24%, 82% 72%, 100% 30%, 100% 70%, 83% 100%, 67% 48%, 52% 100%, 39% 42%, 25% 90%, 14% 30%, 0 65%);
+        }
+.archive-featured-exact .hit-mar .fx-primary::after {
+          width: 54%;
+          right: 1%;
+          bottom: 19%;
+          transform: rotate(-10deg);
+        }
+.archive-featured-exact .hit-mar .fx-secondary {
+          inset: 0 !important;
+          width: auto !important;
+          height: auto !important;
+          left: 0 !important;
+          opacity: .74 !important;
+          transform: none !important;
+          background: none !important;
+          animation: marArcFlickerB 1.7s steps(1,end) infinite !important;
+        }
+.archive-featured-exact .hit-mar .fx-secondary::before {
+          width: 48%;
+          top: 48%;
+          left: -3%;
+          transform: rotate(-7deg);
+        }
+.archive-featured-exact .hit-mar .fx-secondary::after {
+          width: 42%;
+          top: 38%;
+          right: -3%;
+          transform: rotate(12deg);
+        }
+.archive-featured-exact .hit-mar .fx-detail {
+          inset: 4px !important;
+          opacity: .78 !important;
+          border-radius: inherit;
+          border-top: 1px solid rgba(186,230,253,.78);
+          border-right: 1px solid rgba(34,211,238,.48);
+          border-bottom: 1px solid rgba(96,165,250,.58);
+          border-left: 1px solid rgba(103,232,249,.42);
+          box-shadow:
+            inset 0 0 10px rgba(34,211,238,.08),
+            0 0 8px rgba(34,211,238,.12);
+          background: none !important;
+          animation: marPerimeter 1.8s ease-in-out infinite !important;
+        }
+.archive-featured-exact .hit-mar .fx-extra {
+          inset: 0;
+          opacity: .8;
+          animation: marArcFlickerC 1.1s steps(1,end) infinite;
+        }
+.archive-featured-exact .hit-mar .fx-extra::before {
+          width: 36%;
+          top: 8%;
+          right: 8%;
+          transform: rotate(-4deg);
+        }
+.archive-featured-exact .hit-mar .fx-extra::after {
+          width: 31%;
+          bottom: 8%;
+          left: 12%;
+          transform: rotate(5deg);
+        }
+.archive-featured-exact .hit-mar .fx-flare {
+          inset: 0;
+          opacity: .12;
+          background: radial-gradient(circle at 60% 50%, rgba(224,242,254,.42), transparent 32%);
+          animation: marChargeGlow 2.2s ease-in-out infinite;
+        }
+.archive-featured-exact .hit-sir {
+          border-color: rgba(196,181,253,.58) !important;
+          background:
+            radial-gradient(circle at 18% 15%, rgba(34,211,238,.055), transparent 28%),
+            radial-gradient(circle at 85% 80%, rgba(244,114,182,.055), transparent 30%),
+            linear-gradient(135deg, #060913, #101326 52%, #070912) !important;
+          animation: sirLivingBorder 3.8s linear infinite !important;
+        }
+.archive-featured-exact .hit-sir .fx-ambient {
+          inset: -68% !important;
+          opacity: .72 !important;
+          background: conic-gradient(
+            from 0deg,
+            transparent 0deg,
+            rgba(34,211,238,.42) 44deg,
+            rgba(99,102,241,.38) 88deg,
+            rgba(167,139,250,.50) 128deg,
+            rgba(244,114,182,.44) 170deg,
+            rgba(250,204,21,.28) 214deg,
+            rgba(52,211,153,.24) 260deg,
+            rgba(34,211,238,.40) 304deg,
+            transparent 346deg
+          ) !important;
+          filter: blur(22px);
+          animation: sirDimensionRotate 6s linear infinite !important;
+        }
+.archive-featured-exact .hit-sir .fx-primary {
+          top: -25% !important;
+          bottom: -25% !important;
+          left: -28% !important;
+          width: 19% !important;
+          opacity: 0;
+          transform: rotate(12deg) !important;
+          background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(255,255,255,.10),
+            rgba(255,255,255,.92),
+            rgba(103,232,249,.34),
+            rgba(196,181,253,.36),
+            rgba(244,114,182,.30),
+            transparent
+          ) !important;
+          filter: blur(.3px);
+          animation: sirSpectralFlare 4.2s ease-in-out infinite !important;
+        }
+.archive-featured-exact .hit-sir .fx-secondary {
+          inset: 0 !important;
+          opacity: .72 !important;
+          background:
+            linear-gradient(
+              112deg,
+              transparent 4%,
+              rgba(34,211,238,.13) 19%,
+              transparent 31%,
+              rgba(167,139,250,.17) 43%,
+              transparent 56%,
+              rgba(244,114,182,.15) 70%,
+              transparent 84%,
+              rgba(250,204,21,.08) 94%
+            ) !important;
+          background-size: 260% 100% !important;
+          animation: sirGlassRays 4.5s ease-in-out infinite !important;
+        }
+.archive-featured-exact .hit-sir .fx-detail {
+          inset: 0 !important;
+          opacity: .72 !important;
+          border: 0 !important;
+          box-shadow: none !important;
+          background-image:
+            radial-gradient(circle, rgba(255,255,255,.96) 0 .9px, transparent 1.8px),
+            radial-gradient(circle, rgba(103,232,249,.78) 0 1.1px, transparent 1.9px),
+            radial-gradient(circle, rgba(244,114,182,.70) 0 .9px, transparent 1.7px),
+            radial-gradient(circle, rgba(196,181,253,.72) 0 1px, transparent 1.8px) !important;
+          background-size: 43px 43px, 67px 67px, 89px 89px, 113px 113px !important;
+          background-position: 7px 12px, 31px 3px, 18px 41px, 51px 22px !important;
+          animation: sirPrismDust 6.5s linear infinite !important;
+        }
+.archive-featured-exact .hit-sir .fx-extra {
+          inset: -15%;
+          opacity: .46;
+          background:
+            radial-gradient(ellipse at 28% 50%, transparent 0 15%, rgba(34,211,238,.13) 22%, transparent 34%),
+            radial-gradient(ellipse at 68% 45%, transparent 0 13%, rgba(244,114,182,.13) 21%, transparent 35%),
+            radial-gradient(ellipse at 50% 65%, transparent 0 12%, rgba(167,139,250,.14) 20%, transparent 34%);
+          filter: blur(3px);
+          animation: sirLensDrift 5.5s ease-in-out infinite;
+        }
+.archive-featured-exact .hit-sir .fx-flare {
+          inset: 0;
+          opacity: 0;
+          background:
+            radial-gradient(circle at 50% 50%, rgba(255,255,255,.24), transparent 18%),
+            radial-gradient(circle at 50% 50%, rgba(103,232,249,.18), transparent 38%),
+            linear-gradient(90deg, transparent, rgba(196,181,253,.12), transparent);
+          animation: sirJackpotBloom 6.4s ease-in-out infinite;
+        }
+.archive-featured-exact .rarity-fx-v4 .fx-primary::before,
+.archive-featured-exact .rarity-fx-v4 .fx-primary::after,
+.archive-featured-exact .rarity-fx-v4 .fx-secondary::before,
+.archive-featured-exact .rarity-fx-v4 .fx-secondary::after,
+.archive-featured-exact .rarity-fx-v4 .fx-extra::before,
+.archive-featured-exact .rarity-fx-v4 .fx-extra::after {
+          content: none !important;
+        }
+.archive-featured-exact .rarity-fx-v4 {
+          mix-blend-mode: normal;
+        }
+.archive-featured-exact .hit-mar {
+          border-color: rgba(103,232,249,.46) !important;
+          animation: v4MarCardPulse 1.9s ease-in-out infinite !important;
+        }
+.archive-featured-exact .hit-mar .fx-primary,
+.archive-featured-exact .hit-mar .fx-secondary,
+.archive-featured-exact .hit-mar .fx-detail,
+.archive-featured-exact .hit-mar .fx-extra {
+          display: none !important;
+        }
+.archive-featured-exact .hit-mar .fx-ambient {
+          inset: 0 !important;
+          opacity: .48 !important;
+          background:
+            radial-gradient(ellipse at 50% 0%, rgba(34,211,238,.13), transparent 34%),
+            radial-gradient(ellipse at 50% 100%, rgba(59,130,246,.11), transparent 35%) !important;
+          animation: v4MarAtmosphere 2s ease-in-out infinite !important;
+        }
+.archive-featured-exact .mar-electric-field {
+          position: absolute;
+          inset: 2px;
+          width: calc(100% - 4px);
+          height: calc(100% - 4px);
+          z-index: 4;
+          overflow: visible;
+          pointer-events: none;
+        }
+.archive-featured-exact .hit-mar .fx-flare {
+          inset: 0 !important;
+          opacity: .10 !important;
+          background: radial-gradient(circle at 50% 50%, rgba(224,242,254,.20), transparent 55%) !important;
+          animation: v4MarInnerPulse 1.45s ease-in-out infinite !important;
+        }
+.archive-featured-exact .hit-sir {
+          border-color: rgba(196,181,253,.62) !important;
+          background: linear-gradient(135deg, #050712, #0e1225 50%, #070812) !important;
+          animation: v4SirEdge 3s linear infinite !important;
+        }
+.archive-featured-exact .hit-sir .fx-ambient {
+          inset: -72% !important;
+          opacity: .76 !important;
+          background: conic-gradient(
+            from 0deg,
+            rgba(34,211,238,.36),
+            rgba(99,102,241,.34),
+            rgba(167,139,250,.48),
+            rgba(244,114,182,.40),
+            rgba(250,204,21,.24),
+            rgba(52,211,153,.22),
+            rgba(34,211,238,.36)
+          ) !important;
+          filter: blur(24px);
+          animation: v4SirPrism 5.8s linear infinite !important;
+        }
+.archive-featured-exact .hit-sir .fx-primary {
+          top: -25% !important;
+          bottom: -25% !important;
+          left: -24% !important;
+          width: 15% !important;
+          opacity: 0 !important;
+          transform: rotate(11deg) !important;
+          background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(255,255,255,.16),
+            rgba(255,255,255,.96),
+            rgba(103,232,249,.32),
+            rgba(196,181,253,.36),
+            rgba(244,114,182,.30),
+            transparent
+          ) !important;
+          animation: v4SirFlare 3.8s ease-in-out infinite !important;
+        }
+.archive-featured-exact .hit-sir .fx-secondary {
+          inset: 0 !important;
+          opacity: .78 !important;
+          background:
+            linear-gradient(112deg,
+              transparent 4%,
+              rgba(34,211,238,.14) 18%,
+              transparent 30%,
+              rgba(167,139,250,.18) 43%,
+              transparent 56%,
+              rgba(244,114,182,.16) 70%,
+              transparent 83%,
+              rgba(250,204,21,.09) 94%
+            ) !important;
+          background-size: 280% 100% !important;
+          animation: v4SirRays 4s ease-in-out infinite !important;
+        }
+.archive-featured-exact .hit-sir .fx-detail {
+          inset: 0 !important;
+          opacity: .72 !important;
+          border: none !important;
+          box-shadow: none !important;
+          background-image:
+            radial-gradient(circle, rgba(255,255,255,.96) 0 .8px, transparent 1.7px),
+            radial-gradient(circle, rgba(103,232,249,.78) 0 1px, transparent 1.8px),
+            radial-gradient(circle, rgba(244,114,182,.70) 0 .8px, transparent 1.6px),
+            radial-gradient(circle, rgba(196,181,253,.72) 0 .9px, transparent 1.7px) !important;
+          background-size: 41px 41px, 67px 67px, 91px 91px, 119px 119px !important;
+          animation: v4SirDust 5.8s linear infinite !important;
+        }
+.archive-featured-exact .hit-sir .fx-extra {
+          inset: -12% !important;
+          opacity: .52 !important;
+          background:
+            radial-gradient(ellipse at 26% 50%, transparent 0 14%, rgba(34,211,238,.15) 21%, transparent 33%),
+            radial-gradient(ellipse at 68% 44%, transparent 0 12%, rgba(244,114,182,.15) 20%, transparent 34%),
+            radial-gradient(ellipse at 50% 68%, transparent 0 12%, rgba(167,139,250,.16) 20%, transparent 34%) !important;
+          filter: blur(3px);
+          animation: v4SirLens 4.8s ease-in-out infinite !important;
+        }
+.archive-featured-exact .hit-sir .fx-flare {
+          inset: 0 !important;
+          opacity: 0 !important;
+          background:
+            radial-gradient(circle at 50% 50%, rgba(255,255,255,.26), transparent 17%),
+            radial-gradient(circle at 50% 50%, rgba(103,232,249,.18), transparent 38%),
+            linear-gradient(90deg, transparent, rgba(196,181,253,.13), transparent) !important;
+          animation: v4SirBloom 5.4s ease-in-out infinite !important;
+        }
+.archive-featured-exact .hit-sir {
+          border-color: rgba(196,181,253,.68) !important;
+          background:
+            radial-gradient(circle at 12% 16%, rgba(34,211,238,.065), transparent 25%),
+            radial-gradient(circle at 86% 82%, rgba(244,114,182,.065), transparent 27%),
+            linear-gradient(135deg, #050712, #0d1122 50%, #060711) !important;
+          animation: v5SirBorder 2.8s linear infinite !important;
+        }
+.archive-featured-exact .hit-sir .fx-ambient {
+          inset: -75% !important;
+          opacity: .86 !important;
+          background: conic-gradient(
+            from 0deg,
+            rgba(34,211,238,.44),
+            rgba(59,130,246,.30),
+            rgba(139,92,246,.48),
+            rgba(244,114,182,.46),
+            rgba(251,191,36,.28),
+            rgba(52,211,153,.25),
+            rgba(34,211,238,.44)
+          ) !important;
+          filter: blur(22px);
+          animation: v5SirAurora 5.1s linear infinite !important;
+        }
+.archive-featured-exact .hit-sir .fx-primary {
+          display: block !important;
+          top: -28% !important;
+          bottom: -28% !important;
+          left: -24% !important;
+          width: 16% !important;
+          opacity: 0 !important;
+          transform: rotate(11deg) !important;
+          background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(255,255,255,.12),
+            rgba(255,255,255,1),
+            rgba(103,232,249,.38),
+            rgba(196,181,253,.42),
+            rgba(244,114,182,.36),
+            transparent
+          ) !important;
+          filter: blur(.25px);
+          animation: v5SirSpectralSweep 3.25s ease-in-out infinite !important;
+        }
+.archive-featured-exact .hit-sir .fx-secondary {
+          display: block !important;
+          inset: -4% !important;
+          opacity: .82 !important;
+          background:
+            linear-gradient(
+              112deg,
+              transparent 4%,
+              rgba(34,211,238,.16) 16%,
+              transparent 27%,
+              rgba(167,139,250,.22) 40%,
+              transparent 52%,
+              rgba(244,114,182,.19) 65%,
+              transparent 78%,
+              rgba(250,204,21,.11) 91%,
+              transparent
+            ) !important;
+          background-size: 300% 100% !important;
+          filter: blur(.2px);
+          animation: v5SirCaustics 3.7s ease-in-out infinite !important;
+        }
+.archive-featured-exact .hit-sir .fx-detail {
+          display: block !important;
+          inset: 0 !important;
+          opacity: .82 !important;
+          border: none !important;
+          box-shadow: none !important;
+          background-image:
+            radial-gradient(circle, rgba(255,255,255,1) 0 .9px, transparent 1.8px),
+            radial-gradient(circle, rgba(103,232,249,.86) 0 1px, transparent 1.9px),
+            radial-gradient(circle, rgba(244,114,182,.80) 0 .9px, transparent 1.7px),
+            radial-gradient(circle, rgba(196,181,253,.82) 0 1px, transparent 1.8px) !important;
+          background-size: 37px 37px, 61px 61px, 83px 83px, 109px 109px !important;
+          animation: v5SirCrystalDust 5.1s linear infinite !important;
+        }
+.archive-featured-exact .hit-sir .fx-extra {
+          display: block !important;
+          inset: -16% !important;
+          opacity: .62 !important;
+          background:
+            radial-gradient(ellipse at 24% 48%, transparent 0 13%, rgba(34,211,238,.18) 20%, transparent 32%),
+            radial-gradient(ellipse at 70% 42%, transparent 0 11%, rgba(244,114,182,.18) 19%, transparent 33%),
+            radial-gradient(ellipse at 50% 70%, transparent 0 11%, rgba(167,139,250,.20) 19%, transparent 33%) !important;
+          filter: blur(2.5px);
+          animation: v5SirGlassDepth 4.2s ease-in-out infinite !important;
+        }
+.archive-featured-exact .hit-sir .fx-flare {
+          display: block !important;
+          inset: 0 !important;
+          opacity: 0 !important;
+          background:
+            radial-gradient(circle at 50% 50%, rgba(255,255,255,.32), transparent 14%),
+            radial-gradient(circle at 50% 50%, rgba(103,232,249,.21), transparent 34%),
+            radial-gradient(circle at 50% 50%, rgba(244,114,182,.13), transparent 52%) !important;
+          animation: v5SirJackpot 4.9s ease-in-out infinite !important;
+        }
+.archive-featured-exact .hit-sir .fx-ambient {
+          opacity: .90 !important;
+        }
+.archive-featured-exact .hit-sir .fx-primary {
+          animation-duration: 2.9s !important;
+        }
+.archive-featured-exact .hit-sir .fx-secondary {
+          opacity: .88 !important;
+          animation-duration: 3.25s !important;
+        }
+.archive-featured-exact .sir-flash-system {
+          position: absolute;
+          inset: 0;
+          z-index: 4;
+          overflow: hidden;
+          border-radius: inherit;
+          pointer-events: none;
+        }
+.archive-featured-exact .sir-starburst {
+          position: absolute;
+          width: 5px;
+          height: 5px;
+          border-radius: 50%;
+          opacity: 0;
+          background: #fff;
+          box-shadow:
+            0 0 6px rgba(255,255,255,.95),
+            0 0 14px rgba(103,232,249,.55),
+            0 0 22px rgba(196,181,253,.35);
+        }
+.archive-featured-exact .sir-starburst::before,
+.archive-featured-exact .sir-starburst::after {
+          content: "";
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,.95), transparent);
+          transform: translate(-50%,-50%);
+        }
+.archive-featured-exact .sir-starburst::before {
+          width: 74px;
+          height: 1px;
+        }
+.archive-featured-exact .sir-starburst::after {
+          width: 1px;
+          height: 74px;
+          background: linear-gradient(180deg, transparent, rgba(255,255,255,.95), transparent);
+        }
+.archive-featured-exact .sir-starburst-1 {
+          top: 28%;
+          left: 24%;
+          animation: v6SirStarA 4.2s ease-in-out infinite;
+        }
+.archive-featured-exact .sir-starburst-2 {
+          top: 68%;
+          left: 76%;
+          animation: v6SirStarB 4.2s ease-in-out infinite 1.7s;
+        }
+.archive-featured-exact .sir-rainbow-ring {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          width: 32%;
+          aspect-ratio: 1;
+          border-radius: 50%;
+          opacity: 0;
+          transform: translate(-50%,-50%) scale(.35);
+          border: 1px solid rgba(255,255,255,.70);
+          box-shadow:
+            0 -2px 10px rgba(34,211,238,.42),
+            2px 0 10px rgba(167,139,250,.40),
+            0 2px 10px rgba(244,114,182,.38),
+            -2px 0 10px rgba(250,204,21,.25);
+          animation: v6SirRing 5s ease-out infinite;
+        }
+.archive-featured-exact .sir-fracture-system {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+          z-index: 4;
+          overflow: hidden;
+          pointer-events: none;
+        }
+.archive-featured-exact .sir-crack {
+          fill: none;
+          vector-effect: non-scaling-stroke;
+          stroke-linecap: round;
+          stroke-linejoin: round;
+          stroke-width: 1.35;
+          stroke-dasharray: 900;
+          stroke-dashoffset: 900;
+          opacity: 0;
+        }
+.archive-featured-exact .sir-crack-main {
+          animation: v8SirFractureMain 6.2s ease-in-out infinite;
+        }
+.archive-featured-exact .sir-crack-right {
+          animation-delay: .08s;
+        }
+.archive-featured-exact .sir-crack-down {
+          stroke-width: 1.15;
+          animation: v8SirFractureMain 6.2s ease-in-out infinite .15s;
+        }
+.archive-featured-exact .sir-crack-up {
+          stroke-width: 1.05;
+          animation: v8SirFractureMain 6.2s ease-in-out infinite .20s;
+        }
+.archive-featured-exact .sir-crack-branch {
+          stroke-width: .78;
+          animation: v8SirFractureBranch 6.2s ease-in-out infinite;
+        }
+.archive-featured-exact .sir-fracture-core {
+          fill: rgba(255,255,255,.98);
+          opacity: 0;
+          filter:
+            drop-shadow(0 0 4px rgba(255,255,255,1))
+            drop-shadow(0 0 12px rgba(103,232,249,.85))
+            drop-shadow(0 0 22px rgba(196,181,253,.55));
+          animation: v8SirCore 6.2s ease-in-out infinite;
+        }
+.archive-featured-exact .hit-sir .fx-flare {
+          animation: v8SirRefractivePulse 6.2s ease-in-out infinite !important;
+        }
+.archive-featured-exact .hit-sir {
+          animation: v8SirGlassBorder 6.2s ease-in-out infinite !important;
+        }
+.archive-featured-exact .sir-fracture-system {
+          z-index: 8 !important;
+          opacity: 1 !important;
+          mix-blend-mode: screen;
+        }
+.archive-featured-exact .sir-fracture-glow {
+          opacity: 1 !important;
+        }
+.archive-featured-exact .sir-crack {
+          stroke-dasharray: 1 !important;
+          stroke-dashoffset: 0 !important;
+          opacity: .16 !important;
+          stroke-width: 1.45 !important;
+          animation: v81SirCrackPulse 4.8s ease-in-out infinite !important;
+        }
+.archive-featured-exact .sir-crack-branch {
+          opacity: .10 !important;
+          stroke-width: .9 !important;
+          animation: v81SirBranchPulse 4.8s ease-in-out infinite !important;
+        }
+.archive-featured-exact .sir-crack-right { animation-delay: .05s !important; }
+.archive-featured-exact .sir-crack-down { animation-delay: .10s !important; }
+.archive-featured-exact .sir-crack-up { animation-delay: .14s !important; }
+.archive-featured-exact .sir-fracture-core {
+          opacity: .14 !important;
+          animation: v81SirCorePulse 4.8s ease-in-out infinite !important;
+        }
+.archive-featured-exact .sir-rainbow-ring {
+          z-index: 9 !important;
+          animation: v81SirShockwave 4.8s ease-out infinite !important;
+        }
+.archive-featured-exact .sir-starburst-1 {
+          z-index: 10 !important;
+          animation: v81SirBurstA 4.8s ease-in-out infinite !important;
+        }
+.archive-featured-exact .sir-starburst-2 {
+          z-index: 10 !important;
+          animation: v81SirBurstB 4.8s ease-in-out infinite !important;
+        }
+.archive-featured-exact .hit-card.hit-future,
+.archive-featured-exact .showcase-hit-card.hit-future {
+          border: 1px solid rgba(74,238,255,.86);
+          background: radial-gradient(ellipse at 80% 15%,rgba(96,42,184,.33),transparent 55%),
+            radial-gradient(ellipse at 5% 85%,rgba(0,214,255,.16),transparent 55%),
+            linear-gradient(125deg,#07182c 0%,#0b1130 53%,#180e3b 100%);
+          box-shadow: 0 0 0 1px rgba(57,216,255,.12),0 0 30px rgba(0,225,255,.22),
+            0 16px 45px rgba(3,6,30,.42),inset 0 0 32px rgba(48,130,230,.12);
+          animation: futureCardBreath 5s ease-in-out infinite;
+        }
+.archive-featured-exact .hit-card.hit-future::before,
+.archive-featured-exact .showcase-hit-card.hit-future::before {
+          inset: 0; opacity: 1;
+          background: linear-gradient(135deg,rgba(76,231,255,.14),transparent 36%,rgba(170,80,255,.10));
+          animation: none;
+        }
+.archive-featured-exact .hit-card.hit-future::after,
+.archive-featured-exact .showcase-hit-card.hit-future::after {
+          background: linear-gradient(90deg,transparent,rgba(93,246,255,.26),rgba(226,248,255,.4),transparent);
+          animation: futureGlint 6s ease-in-out infinite;
+        }
+.archive-featured-exact .hit-future .rarity-fx { position:absolute; inset:0; z-index:0; pointer-events:none; overflow:hidden; }
+.archive-featured-exact .hit-future .rarity-fx > .fx-ambient,
+.archive-featured-exact .hit-future .rarity-fx > .fx-primary,
+.archive-featured-exact .hit-future .rarity-fx > .fx-secondary,
+.archive-featured-exact .hit-future .rarity-fx > .fx-detail,
+.archive-featured-exact .hit-future .rarity-fx > .fx-extra,
+.archive-featured-exact .hit-future .rarity-fx > .fx-flare { display:none; }
+.archive-featured-exact .hit-future .future-interface { position:absolute; inset:0; overflow:hidden; }
+.archive-featured-exact .hit-future .future-grid { position:absolute; inset:0; opacity:.25;
+          background-image:linear-gradient(rgba(61,220,255,.22) 1px,transparent 1px),linear-gradient(90deg,rgba(61,220,255,.22) 1px,transparent 1px);
+          background-size:29px 29px; transform:perspective(300px) rotateX(8deg) scale(1.15);
+          mask-image:linear-gradient(110deg,transparent 8%,black 65%);
+        }
+.archive-featured-exact .hit-future .future-scan { position:absolute; left:0; right:0; top:-20%; height:24%;
+          background:linear-gradient(180deg,transparent,rgba(46,226,255,.08),rgba(119,238,255,.25),transparent);
+          animation:futureScan 5.2s linear infinite;
+        }
+.archive-featured-exact .hit-future .future-corner { position:absolute; width:29px; height:29px;
+          border-color:#59f1ff; border-style:solid; filter:drop-shadow(0 0 7px rgba(65,238,255,.75));
+          animation:futureCornerPulse 3.5s ease-in-out infinite;
+        }
+.archive-featured-exact .hit-future .future-corner-tl { top:10px;left:10px;border-width:2px 0 0 2px; }
+.archive-featured-exact .hit-future .future-corner-tr { top:10px;right:10px;border-width:2px 2px 0 0; }
+.archive-featured-exact .hit-future .future-corner-bl { bottom:10px;left:10px;border-width:0 0 2px 2px; }
+.archive-featured-exact .hit-future .future-corner-br { bottom:10px;right:10px;border-width:0 2px 2px 0; }
+.archive-featured-exact .hit-future .future-circuit { position:absolute; width:130px;height:70px; opacity:.6;
+          border:1px solid rgba(96,236,255,.65); transform:skewX(-25deg);
+          box-shadow:0 0 12px rgba(61,221,255,.25); }
+.archive-featured-exact .hit-future .future-circuit-a { top:-48px;right:17%; }
+.archive-featured-exact .hit-future .future-circuit-b { bottom:-50px;left:19%;border-color:rgba(174,116,255,.7); }
+.archive-featured-exact .hit-future .future-pulse { position:absolute; width:210px;height:210px;right:-90px;top:-95px;
+          border:1px solid rgba(74,230,255,.25);border-radius:50%;
+          box-shadow:0 0 0 24px rgba(74,230,255,.035),0 0 0 49px rgba(139,92,246,.04);
+          animation:futureRadar 5s ease-in-out infinite;
+        }
+.archive-featured-exact .hit-future .hit-layout,
+.archive-featured-exact .hit-future .hit-content { position:relative;z-index:2; }
+.archive-featured-exact .hit-future .hit-break { color:#9af4ff;text-shadow:0 0 12px rgba(55,224,255,.45); }
+.archive-featured-exact .hit-future h3 { text-shadow:0 0 16px rgba(53,231,255,.45),0 4px 14px rgba(0,0,0,.6); }
+.archive-featured-exact .hit-future .break-number { border-color:rgba(94,239,255,.8);background:rgba(5,35,62,.75);
+          box-shadow:0 0 14px rgba(59,225,255,.23); }
+.archive-featured-exact .hit-future .hit-card-art { filter:drop-shadow(0 0 14px rgba(45,231,255,.4)) drop-shadow(0 10px 18px rgba(0,0,0,.5)); }
+.archive-featured-exact .hit-future .hit-badge,
+.archive-featured-exact .hit-future .badge-future {
+          background:linear-gradient(110deg,#70f5ff,#80caff 48%,#bd8dff);color:#071229;
+          border:1px solid rgba(217,253,255,.85);box-shadow:0 0 17px rgba(48,226,255,.4),inset 0 1px 0 #fff;
+        }
+.archive-featured-exact .hit-future .future-orbit { position:absolute; width:270px;height:270px;right:-92px;top:-112px;
+          border:1px dashed rgba(99,241,255,.35);border-radius:50%;
+          box-shadow:0 0 20px rgba(63,221,255,.09);animation:futureOrbit 20s linear infinite; }
+.archive-featured-exact .hit-future .future-orbit-two { width:195px;height:195px;right:-53px;top:-74px;
+          border-color:rgba(193,116,255,.48);animation-duration:14s;animation-direction:reverse; }
+.archive-featured-exact .hit-future .future-data { position:absolute;left:17%;right:16%;height:2px;
+          background:repeating-linear-gradient(90deg,rgba(70,238,255,.8) 0 19px,transparent 19px 27px,rgba(183,111,255,.8) 27px 33px,transparent 33px 53px);
+          opacity:.5;filter:drop-shadow(0 0 5px #45eaff);animation:futureData 4s ease-in-out infinite; }
+.archive-featured-exact .hit-future .future-data-top { top:9px; }
+.archive-featured-exact .hit-future .future-data-bottom { bottom:9px;animation-delay:-2s; }
+.archive-featured-exact .hit-future .future-node { position:absolute;width:6px;height:6px;border-radius:50%;background:#8af9ff;
+          box-shadow:0 0 8px 3px rgba(54,230,255,.65);animation:futureNode 3s ease-in-out infinite; }
+.archive-featured-exact .hit-future .future-node-a { right:23%;top:21px; }
+.archive-featured-exact .hit-future .future-node-b { left:22%;bottom:21px;animation-delay:-1.5s;background:#c68bff;
+          box-shadow:0 0 8px 3px rgba(173,98,255,.6); }
+.archive-featured-exact .hit-card.hit-future .hit-badge.badge-future,
+.archive-featured-exact .showcase-hit-card.hit-future .hit-badge.badge-future,
+.archive-featured-exact .hit-future .hit-badge,
+.archive-featured-exact .hit-future .badge-future {
+          background:linear-gradient(115deg,#22e8ff 0%,#72f7ff 23%,#a68aff 58%,#e09aff 82%,#44ecff 100%) !important;
+          background-size:220% 100% !important;
+          color:#09112c !important;
+          border:1px solid #bdfbff !important;
+          opacity:1 !important;
+          -webkit-text-fill-color:#09112c !important;
+          text-shadow:none !important;
+          font-weight:950 !important;
+          letter-spacing:2px;
+          box-shadow:0 0 0 1px rgba(15,245,255,.32),0 0 18px rgba(47,237,255,.65),0 0 32px rgba(163,92,255,.32),inset 0 1px 0 rgba(255,255,255,.85) !important;
+          animation:futureBadgeShift 4s ease-in-out infinite;
+        }
+.archive-featured-exact .hit-sir .sir-prismatic-system { position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:1; }
+.archive-featured-exact .hit-card.hit-sir,
+.archive-featured-exact .showcase-hit-card.hit-sir { background:radial-gradient(ellipse at 25% 0%,rgba(255,111,189,.24),transparent 48%),radial-gradient(ellipse at 86% 100%,rgba(67,216,255,.25),transparent 54%),linear-gradient(120deg,#211038 0%,#16264c 42%,#331544 78%,#101b38 100%)!important;border:1px solid rgba(244,203,255,.8)!important;box-shadow:0 0 0 1px rgba(127,219,255,.3),0 0 30px rgba(215,126,255,.25),0 18px 50px rgba(0,0,0,.45)!important; }
+.archive-featured-exact .hit-sir .sir-prism-aura {position:absolute;inset:-60%;background:conic-gradient(from 25deg,transparent 0deg,rgba(250,168,235,.16) 48deg,transparent 85deg,rgba(100,229,255,.22) 135deg,transparent 185deg,rgba(253,220,129,.16) 245deg,transparent 290deg,rgba(191,150,255,.2) 340deg,transparent 360deg);animation:sirFoilTurn 15s linear infinite;}
+.archive-featured-exact .hit-sir .sir-prism-ribbon {position:absolute;inset:-50%;width:65%;transform:rotate(27deg);filter:blur(17px);background:linear-gradient(90deg,transparent,rgba(255,255,255,.13),rgba(128,238,255,.2),rgba(244,152,250,.19),transparent);animation:sirFoilSweep 7s ease-in-out infinite;}
+.archive-featured-exact .hit-sir .sir-prism-ribbon-two {animation-delay:-3.5s;transform:rotate(-28deg);opacity:.65;}
+.archive-featured-exact .hit-sir .sir-prism-shimmer {position:absolute;inset:0;background:repeating-linear-gradient(122deg,transparent 0px,transparent 23px,rgba(255,255,255,.045) 24px,transparent 26px);opacity:.7;mask-image:linear-gradient(90deg,#000,transparent 65%);}
+.archive-featured-exact .hit-sir .sir-prism-stars {position:absolute;inset:0;width:100%;height:100%;overflow:visible;}
+.archive-featured-exact .hit-sir .sir-prism-star {transform-box:fill-box;transform-origin:center;animation:sirStarTwinkle 3.6s ease-in-out infinite;}
+.archive-featured-exact .hit-sir .sir-prism-star-1,
+.archive-featured-exact .hit-sir .sir-prism-star-4 {animation-delay:-1.2s;}
+.archive-featured-exact .hit-sir .sir-prism-star-2,
+.archive-featured-exact .hit-sir .sir-prism-star-5 {animation-delay:-2.4s;}
+.archive-featured-exact .hit-sir .badge-sir {background:linear-gradient(110deg,#fce7f3,#c4b5fd,#9ceaff,#fff1bd,#fbcfe8)!important;background-size:250% 250%!important;color:#191032!important;border:1px solid rgba(255,255,255,.8)!important;box-shadow:0 0 19px rgba(223,161,255,.55)!important;animation:sirBadgeFoil 6s ease-in-out infinite;}
+.archive-featured-exact .hit-sir .hit-content,
+.archive-featured-exact .hit-sir .hit-layout {position:relative;z-index:3;}
+.archive-featured-exact .hit-mar .mar-storm-system {position:absolute;inset:0;pointer-events:none;z-index:4;overflow:hidden;border-radius:inherit;}
+.archive-featured-exact .hit-mar .mar-storm-glow {position:absolute;inset:0;background:radial-gradient(ellipse at 4% 25%,rgba(0,174,255,.17),transparent 32%),radial-gradient(ellipse at 95% 76%,rgba(0,143,255,.18),transparent 35%);animation:marStormBreath 5.4s ease-in-out infinite;}
+.archive-featured-exact .hit-mar .mar-storm-lightning {position:absolute;inset:0;width:100%;height:100%;overflow:visible;}
+.archive-featured-exact .hit-mar .mar-discharge {fill:none;stroke-linejoin:round;stroke-linecap:round;opacity:0;animation:marElectricStrike 7.1s steps(1,end) infinite;}
+.archive-featured-exact .hit-mar .mar-discharge-1 {animation-delay:-.3s;}
+.archive-featured-exact .hit-mar .mar-discharge-2 {animation-delay:-3.7s;}
+.archive-featured-exact .hit-mar .mar-discharge-3 {animation-delay:-5.1s;}
+.archive-featured-exact .hit-mar .mar-discharge-4 {animation-delay:-2.1s;}
+.archive-featured-exact .hit-mar .mar-discharge-5 {animation-delay:-6.2s;}
+.archive-featured-exact .hit-mar .mar-discharge-6 {animation-delay:-4.5s;}
+.archive-featured-exact .hit-mar .mar-arc-halo {stroke:#008dff;stroke-width:13;opacity:.9;}
+.archive-featured-exact .hit-mar .mar-arc-blue {stroke:#00bfff;stroke-width:5.3;filter:drop-shadow(0 0 5px #009dff);}
+.archive-featured-exact .hit-mar .mar-arc-core {stroke:#efffff;stroke-width:1.55;filter:drop-shadow(0 0 2px #fff);}
+.archive-featured-exact .hit-mar .hit-content,
+.archive-featured-exact .hit-mar .hit-layout {position:relative;z-index:3;}
+.archive-featured-exact .hit-mar .mar-storm-system {
+          position: absolute; inset: 0; z-index: 4;
+          pointer-events: none; overflow: hidden; border-radius: inherit;
+        }
+.archive-featured-exact .hit-mar .mar-storm-lightning {
+          position: absolute; inset: 0; width: 100%; height: 100%;
+        }
+.archive-featured-exact .hit-mar .mar-storm-glow {
+          position: absolute; inset: 0;
+          background: radial-gradient(ellipse at 20% 40%,rgba(0,175,255,.19),transparent 60%),
+                      radial-gradient(ellipse at 80% 60%,rgba(0,175,255,.19),transparent 60%);
+          animation: marCoilAura 5s ease-in-out infinite alternate;
+        }
+.archive-featured-exact .hit-mar .mar-coil { opacity: .82; animation: marCoilPulse 5.1s ease-in-out infinite; }
+.archive-featured-exact .hit-mar .mar-coil:nth-of-type(2) {animation-duration:3.7s;animation-delay:-1.4s}
+.archive-featured-exact .hit-mar .mar-coil:nth-of-type(3) {animation-duration:4.3s;animation-delay:-2.2s}
+.archive-featured-exact .hit-mar .mar-coil:nth-of-type(4) {animation-duration:2.9s;animation-delay:-.8s}
+.archive-featured-exact .hit-mar .mar-coil:nth-of-type(5) {animation-duration:4.9s;animation-delay:-3.1s}
+.archive-featured-exact .hit-mar .mar-coil:nth-of-type(6) {animation-duration:3.3s;animation-delay:-1.9s}
+.archive-featured-exact .hit-mar .mar-coil:nth-of-type(7) {animation-duration:4.6s;animation-delay:-2.7s}
+.archive-featured-exact .hit-mar .mar-coil:nth-of-type(8) {animation-duration:3.9s;animation-delay:-.5s}
+.archive-featured-exact .hit-mar .mar-coil path { fill:none; stroke-linejoin:round; stroke-linecap:round; }
+.archive-featured-exact .hit-mar .mar-coil-bloom path {stroke:#00bfff;stroke-width:10;opacity:.9}
+.archive-featured-exact .hit-mar .mar-coil-electric path {stroke:#00caff;stroke-width:3.1;filter:drop-shadow(0 0 4px #00bfff)}
+.archive-featured-exact .hit-mar .mar-coil-white path {stroke:#ecfeff;stroke-width:1.15}
+.archive-featured-exact .hit-mar .mar-coil-white path:last-child {stroke-width:.8}
+.archive-featured-exact .hit-mar::before {opacity:.16!important;animation:none!important}
+.archive-featured-exact .hit-mar::after {opacity:.12!important;animation:none!important}
+@keyframes  fastSweep  {
+          0% { left: -85%; opacity: 0; }
+          18% { opacity: .75; }
+          50% { left: 130%; opacity: 0; }
+          100% { left: 130%; opacity: 0; }
+        }
+@keyframes  sirSweep  {
+          0% { left: -95%; opacity: 0; }
+          16% { opacity: .8; }
+          52% { left: 135%; opacity: 0; }
+          100% { left: 135%; opacity: 0; }
+        }
+@keyframes  marCosmicFloat  {
+          0%, 100% { transform: translateY(0) scale(1); filter: brightness(1) saturate(1.05); }
+          50% { transform: translateY(-3px) scale(1.012); filter: brightness(1.17) saturate(1.2); }
+        }
+@keyframes  starTwinkle  {
+          0%, 100% { opacity: .55; filter: brightness(1); }
+          50% { opacity: .95; filter: brightness(1.45); }
+        }
+@keyframes  sirLegendaryFloat  {
+          0%, 100% { transform: translateY(0) scale(1); filter: brightness(1) saturate(1.12); }
+          50% { transform: translateY(-4px) scale(1.016); filter: brightness(1.22) saturate(1.35); }
+        }
+@keyframes  rainbowBorder  {
+          0% { filter: hue-rotate(0deg) saturate(1.25); }
+          100% { filter: hue-rotate(360deg) saturate(1.25); }
+        }
+@keyframes  marLightning  {
+          0%, 69%, 73%, 77%, 100% { background-position: -120% 0, 0 0; opacity: .10; }
+          70% { background-position: 12% 0, 0 0; opacity: .95; }
+          71% { background-position: 24% 0, 0 0; opacity: .22; }
+          72% { background-position: 36% 0, 0 0; opacity: .78; }
+          74% { background-position: 55% 0, 0 0; opacity: .14; }
+          75% { background-position: 70% 0, 0 0; opacity: .62; }
+          76% { background-position: 84% 0, 0 0; opacity: .16; }
+        }
+@keyframes  marCharge  {
+          0%,66%,80%,100% { opacity: .04; }
+          71%,75% { opacity: .24; }
+        }
+@keyframes  sirPrism  {
+          0%,100% { background-position: 0% 50%, 0 0; opacity: .48; }
+          50% { background-position: 100% 50%, 0 0; opacity: .82; }
+        }
+@keyframes  sirGlint  {
+          0%,30% { left: -42%; opacity: 0; }
+          42% { opacity: .30; }
+          72% { left: 118%; opacity: .24; }
+          82%,100% { left: 118%; opacity: 0; }
+        }
+@keyframes  marBolt  {
+          0%,68%,72%,76%,100% { opacity: 0; transform: rotate(9deg) scale(.82); }
+          69% { opacity: 1; transform: rotate(9deg) scale(1); }
+          70% { opacity: .12; }
+          71% { opacity: .88; transform: rotate(7deg) scale(.96); }
+          73% { opacity: .18; }
+          74% { opacity: .72; transform: rotate(10deg) scale(1.02); }
+          75% { opacity: .08; }
+        }
+@keyframes  marFlash  {
+          0%,68%,72%,76%,100% { opacity: 0; }
+          69%,71%,74% { opacity: 1; }
+          70%,73%,75% { opacity: .10; }
+        }
+@keyframes  sirHoloRotate  {
+          from { transform: rotate(0deg) scale(1); }
+          50% { transform: rotate(180deg) scale(1.08); }
+          to { transform: rotate(360deg) scale(1); }
+        }
+@keyframes  sirHoloSweep  {
+          0%,18% { left: -30%; opacity: 0; }
+          28% { opacity: .58; }
+          60% { left: 118%; opacity: .40; }
+          70%,100% { left: 118%; opacity: 0; }
+        }
+@keyframes  fxMarBolt  {
+          0%,61%,65%,69%,100% { opacity: 0; transform: rotate(8deg) scale(.84); }
+          62% { opacity: 1; transform: rotate(8deg) scale(1); }
+          63% { opacity: .10; }
+          64% { opacity: .94; transform: rotate(5deg) scale(.97); }
+          66% { opacity: .12; }
+          67% { opacity: .78; transform: rotate(10deg) scale(1.03); }
+          68% { opacity: .06; }
+        }
+@keyframes  fxMarBoltSmall  {
+          0%,63%,67%,100% { opacity: 0; }
+          64% { opacity: .82; }
+          65% { opacity: .08; }
+          66% { opacity: .62; }
+        }
+@keyframes  fxMarFlash  {
+          0%,61%,65%,69%,100% { opacity: 0; }
+          62%,64%,67% { opacity: 1; }
+          63%,66%,68% { opacity: .08; }
+        }
+@keyframes  fxSirRotate  {
+          from { transform: rotate(0deg) scale(1); }
+          50% { transform: rotate(180deg) scale(1.08); }
+          to { transform: rotate(360deg) scale(1); }
+        }
+@keyframes  fxSirSweep  {
+          0%,16% { left: -28%; opacity: 0; }
+          28% { opacity: .85; }
+          62% { left: 114%; opacity: .62; }
+          72%,100% { left: 114%; opacity: 0; }
+        }
+@keyframes  fxSirFilm  {
+          0%,100% { background-position: 0% 50%; opacity: .45; }
+          50% { background-position: 100% 50%; opacity: .9; }
+        }
+@keyframes  fxMarBorder  {
+          0%,58%,72%,100% {
+            border-color: rgba(34,211,238,.28);
+            box-shadow: 0 14px 34px rgba(0,0,0,.28);
+          }
+          62%,66%,69% {
+            border-color: rgba(186,230,253,.92);
+            box-shadow:
+              0 14px 34px rgba(0,0,0,.28),
+              0 0 14px rgba(34,211,238,.30),
+              inset 0 0 16px rgba(34,211,238,.08);
+          }
+        }
+@keyframes  fxMarStorm  {
+          0%,60%,64%,68%,72%,100% {
+            opacity: .10;
+            background-position: 0 0, 0 0, -60% 0;
+          }
+          61%,65%,69% {
+            opacity: 1;
+            background-position: 0 0, 0 0, 80% 0;
+          }
+          62%,66%,70% { opacity: .18; }
+        }
+@keyframes  fxMarBranch  {
+          0%,64%,68%,100% { opacity: 0; }
+          65% { opacity: .92; transform: rotate(18deg) scale(1); }
+          66% { opacity: .08; }
+          67% { opacity: .72; transform: rotate(15deg) scale(.96); }
+        }
+@keyframes  fxSirBorder  {
+          0%,100% {
+            border-color: rgba(167,139,250,.38);
+            box-shadow: 0 14px 34px rgba(0,0,0,.28);
+          }
+          33% {
+            border-color: rgba(34,211,238,.72);
+            box-shadow: 0 14px 34px rgba(0,0,0,.28), 0 0 15px rgba(34,211,238,.17);
+          }
+          66% {
+            border-color: rgba(244,114,182,.68);
+            box-shadow: 0 14px 34px rgba(0,0,0,.28), 0 0 15px rgba(244,114,182,.15);
+          }
+        }
+@keyframes  fxSirRotateV2  {
+          from { transform: rotate(0deg) scale(1); }
+          50% { transform: rotate(180deg) scale(1.12); }
+          to { transform: rotate(360deg) scale(1); }
+        }
+@keyframes  fxSirRays  {
+          0%,100% { background-position: 0% 50%; opacity: .38; }
+          50% { background-position: 100% 50%; opacity: .78; }
+        }
+@keyframes  fxSirParticles  {
+          from { background-position: 7px 13px, 38px 2px, 19px 39px; }
+          to { background-position: 7px -85px, 38px -144px, 19px -155px; }
+        }
+@keyframes  marChargedEdge  {
+          0%,100% {
+            border-color: rgba(103,232,249,.42);
+            box-shadow: 0 14px 34px rgba(0,0,0,.28), 0 0 8px rgba(34,211,238,.08);
+          }
+          50% {
+            border-color: rgba(224,242,254,.74);
+            box-shadow: 0 14px 34px rgba(0,0,0,.28), 0 0 15px rgba(34,211,238,.18);
+          }
+        }
+@keyframes  marStormDrift  {
+          from { background-position: 0 0, 0 0, -70% 0; }
+          to { background-position: 0 0, 0 0, 120% 0; }
+        }
+@keyframes  marArcFlickerA  {
+          0%,100% { opacity: .72; transform: translate(0,0); }
+          14% { opacity: .28; transform: translate(1px,-1px); }
+          17% { opacity: .92; }
+          43% { opacity: .56; transform: translate(-1px,1px); }
+          47% { opacity: .96; }
+          71% { opacity: .38; }
+          75% { opacity: .86; }
+        }
+@keyframes  marArcFlickerB  {
+          0%,100% { opacity: .46; }
+          20% { opacity: .88; }
+          23% { opacity: .24; }
+          52% { opacity: .72; }
+          56% { opacity: .30; }
+          82% { opacity: .94; }
+        }
+@keyframes  marArcFlickerC  {
+          0%,100% { opacity: .34; }
+          11% { opacity: .92; }
+          15% { opacity: .18; }
+          38% { opacity: .70; }
+          44% { opacity: .26; }
+          67% { opacity: .88; }
+          73% { opacity: .22; }
+        }
+@keyframes  marPerimeter  {
+          0%,100% { opacity: .55; filter: brightness(.9); }
+          50% { opacity: 1; filter: brightness(1.35); }
+        }
+@keyframes  marChargeGlow  {
+          0%,100% { opacity: .08; transform: scale(.96); }
+          50% { opacity: .24; transform: scale(1.04); }
+        }
+@keyframes  sirLivingBorder  {
+          0%,100% {
+            border-color: rgba(103,232,249,.58);
+            box-shadow: 0 14px 34px rgba(0,0,0,.30), 0 0 12px rgba(34,211,238,.12);
+          }
+          25% {
+            border-color: rgba(167,139,250,.72);
+            box-shadow: 0 14px 34px rgba(0,0,0,.30), 0 0 15px rgba(167,139,250,.14);
+          }
+          50% {
+            border-color: rgba(244,114,182,.70);
+            box-shadow: 0 14px 34px rgba(0,0,0,.30), 0 0 15px rgba(244,114,182,.13);
+          }
+          75% {
+            border-color: rgba(250,204,21,.52);
+            box-shadow: 0 14px 34px rgba(0,0,0,.30), 0 0 13px rgba(250,204,21,.10);
+          }
+        }
+@keyframes  sirDimensionRotate  {
+          from { transform: rotate(0deg) scale(1); }
+          50% { transform: rotate(180deg) scale(1.13); }
+          to { transform: rotate(360deg) scale(1); }
+        }
+@keyframes  sirSpectralFlare  {
+          0%,14% { left: -28%; opacity: 0; }
+          25% { opacity: .96; }
+          58% { left: 116%; opacity: .72; }
+          68%,100% { left: 116%; opacity: 0; }
+        }
+@keyframes  sirGlassRays  {
+          0%,100% { background-position: 0% 50%; opacity: .48; }
+          50% { background-position: 100% 50%; opacity: .86; }
+        }
+@keyframes  sirPrismDust  {
+          from { background-position: 7px 12px, 31px 3px, 18px 41px, 51px 22px; }
+          to { background-position: 7px -74px, 31px -131px, 18px -137px, 51px -204px; }
+        }
+@keyframes  sirLensDrift  {
+          0%,100% { transform: translate(-2%,0) rotate(-2deg) scale(.96); }
+          50% { transform: translate(2%,1%) rotate(2deg) scale(1.06); }
+        }
+@keyframes  sirJackpotBloom  {
+          0%,68%,100% { opacity: 0; transform: scale(.92); }
+          78% { opacity: .78; transform: scale(1.02); }
+          84% { opacity: .26; }
+          89% { opacity: .58; transform: scale(1.06); }
+          94% { opacity: .08; }
+        }
+@keyframes  v4MarCardPulse  {
+          0%,100% { box-shadow:0 14px 34px rgba(0,0,0,.28),0 0 8px rgba(34,211,238,.10); }
+          50% { box-shadow:0 14px 34px rgba(0,0,0,.28),0 0 16px rgba(34,211,238,.20); }
+        }
+@keyframes  v4MarAtmosphere  {
+          0%,100% { opacity:.32; }
+          50% { opacity:.62; }
+        }
+@keyframes  v4MarInnerPulse  {
+          0%,100% { opacity:.06; transform:scale(.96); }
+          50% { opacity:.20; transform:scale(1.04); }
+        }
+@keyframes  v4SirEdge  {
+          0%,100% { border-color:rgba(103,232,249,.58); box-shadow:0 14px 34px rgba(0,0,0,.30),0 0 12px rgba(34,211,238,.12); }
+          25% { border-color:rgba(167,139,250,.76); box-shadow:0 14px 34px rgba(0,0,0,.30),0 0 16px rgba(167,139,250,.16); }
+          50% { border-color:rgba(244,114,182,.72); box-shadow:0 14px 34px rgba(0,0,0,.30),0 0 16px rgba(244,114,182,.14); }
+          75% { border-color:rgba(250,204,21,.52); box-shadow:0 14px 34px rgba(0,0,0,.30),0 0 14px rgba(250,204,21,.10); }
+        }
+@keyframes  v4SirPrism  {
+          from { transform:rotate(0deg) scale(1); }
+          50% { transform:rotate(180deg) scale(1.13); }
+          to { transform:rotate(360deg) scale(1); }
+        }
+@keyframes  v4SirFlare  {
+          0%,12% { left:-24%; opacity:0; }
+          24% { opacity:.98; }
+          56% { left:112%; opacity:.70; }
+          66%,100% { left:112%; opacity:0; }
+        }
+@keyframes  v4SirRays  {
+          0%,100% { background-position:0% 50%; opacity:.52; }
+          50% { background-position:100% 50%; opacity:.90; }
+        }
+@keyframes  v4SirDust  {
+          from { background-position:7px 12px,31px 3px,18px 41px,51px 22px; }
+          to { background-position:7px -70px,31px -131px,18px -141px,51px -216px; }
+        }
+@keyframes  v4SirLens  {
+          0%,100% { transform:translate(-2%,0) rotate(-2deg) scale(.96); }
+          50% { transform:translate(2%,1%) rotate(2deg) scale(1.07); }
+        }
+@keyframes  v4SirBloom  {
+          0%,65%,100% { opacity:0; transform:scale(.92); }
+          76% { opacity:.82; transform:scale(1.02); }
+          83% { opacity:.22; }
+          89% { opacity:.58; transform:scale(1.07); }
+          94% { opacity:.06; }
+        }
+@keyframes  v5SirBorder  {
+          0%,100% { border-color:rgba(103,232,249,.62); box-shadow:0 14px 34px rgba(0,0,0,.30),0 0 13px rgba(34,211,238,.13); }
+          25% { border-color:rgba(167,139,250,.82); box-shadow:0 14px 34px rgba(0,0,0,.30),0 0 18px rgba(167,139,250,.18); }
+          50% { border-color:rgba(244,114,182,.78); box-shadow:0 14px 34px rgba(0,0,0,.30),0 0 18px rgba(244,114,182,.16); }
+          75% { border-color:rgba(250,204,21,.58); box-shadow:0 14px 34px rgba(0,0,0,.30),0 0 15px rgba(250,204,21,.11); }
+        }
+@keyframes  v5SirAurora  {
+          from { transform:rotate(0deg) scale(1); }
+          50% { transform:rotate(180deg) scale(1.15); }
+          to { transform:rotate(360deg) scale(1); }
+        }
+@keyframes  v5SirSpectralSweep  {
+          0%,10% { left:-24%; opacity:0; }
+          22% { opacity:1; }
+          55% { left:114%; opacity:.78; }
+          65%,100% { left:114%; opacity:0; }
+        }
+@keyframes  v5SirCaustics  {
+          0%,100% { background-position:0% 50%; opacity:.56; }
+          50% { background-position:100% 50%; opacity:.94; }
+        }
+@keyframes  v5SirCrystalDust  {
+          from { background-position:7px 12px,31px 3px,18px 41px,51px 22px; }
+          to { background-position:7px -62px,31px -119px,18px -125px,51px -196px; }
+        }
+@keyframes  v5SirGlassDepth  {
+          0%,100% { transform:translate(-2%,0) rotate(-2deg) scale(.95); }
+          50% { transform:translate(2%,1%) rotate(2deg) scale(1.08); }
+        }
+@keyframes  v5SirJackpot  {
+          0%,58%,100% { opacity:0; transform:scale(.90); }
+          69% { opacity:.92; transform:scale(1.02); }
+          76% { opacity:.24; }
+          83% { opacity:.68; transform:scale(1.08); }
+          90% { opacity:.07; }
+        }
+@keyframes  v6SirStarA  {
+          0%,58%,100% { opacity:0; transform:scale(.35) rotate(0deg); }
+          68% { opacity:1; transform:scale(1.25) rotate(20deg); }
+          76% { opacity:.24; transform:scale(.78) rotate(35deg); }
+          82% { opacity:.78; transform:scale(1) rotate(45deg); }
+          90% { opacity:0; transform:scale(1.5) rotate(55deg); }
+        }
+@keyframes  v6SirStarB  {
+          0%,60%,100% { opacity:0; transform:scale(.3) rotate(45deg); }
+          70% { opacity:.92; transform:scale(1.05) rotate(65deg); }
+          79% { opacity:.18; }
+          86% { opacity:.70; transform:scale(.86) rotate(80deg); }
+          94% { opacity:0; transform:scale(1.4) rotate(95deg); }
+        }
+@keyframes  v6SirRing  {
+          0%,55% { opacity:0; transform:translate(-50%,-50%) scale(.25); }
+          65% { opacity:.78; }
+          88% { opacity:.18; }
+          100% { opacity:0; transform:translate(-50%,-50%) scale(3.6); }
+        }
+@keyframes  v8SirFractureMain  {
+          0%,54% {
+            stroke-dashoffset:900;
+            opacity:0;
+          }
+          58% {
+            opacity:.96;
+          }
+          67% {
+            stroke-dashoffset:0;
+            opacity:1;
+          }
+          76% {
+            stroke-dashoffset:0;
+            opacity:.86;
+          }
+          83% {
+            stroke-dashoffset:-900;
+            opacity:.36;
+          }
+          88%,100% {
+            stroke-dashoffset:-900;
+            opacity:0;
+          }
+        }
+@keyframes  v8SirFractureBranch  {
+          0%,58% {
+            stroke-dashoffset:900;
+            opacity:0;
+          }
+          64% {
+            opacity:.82;
+          }
+          72% {
+            stroke-dashoffset:0;
+            opacity:.92;
+          }
+          79% {
+            stroke-dashoffset:0;
+            opacity:.64;
+          }
+          85% {
+            stroke-dashoffset:-900;
+            opacity:.20;
+          }
+          89%,100% {
+            stroke-dashoffset:-900;
+            opacity:0;
+          }
+        }
+@keyframes  v8SirCore  {
+          0%,54%,88%,100% {
+            opacity:0;
+            transform:scale(.3);
+            transform-origin:505px 126px;
+          }
+          59% {
+            opacity:1;
+            transform:scale(1.35);
+          }
+          66% {
+            opacity:.46;
+            transform:scale(.72);
+          }
+          72% {
+            opacity:.92;
+            transform:scale(1);
+          }
+          81% {
+            opacity:.22;
+            transform:scale(.55);
+          }
+        }
+@keyframes  v8SirRefractivePulse  {
+          0%,53%,100% {
+            opacity:0;
+            transform:scale(.96);
+          }
+          59% {
+            opacity:.28;
+            transform:scale(.99);
+          }
+          68% {
+            opacity:.74;
+            transform:scale(1.025);
+          }
+          76% {
+            opacity:.22;
+            transform:scale(1.045);
+          }
+          84% {
+            opacity:.58;
+            transform:scale(1.065);
+          }
+          90% {
+            opacity:0;
+            transform:scale(1.08);
+          }
+        }
+@keyframes  v8SirGlassBorder  {
+          0%,52%,100% {
+            border-color:rgba(103,232,249,.60);
+            box-shadow:
+              0 14px 34px rgba(0,0,0,.30),
+              0 0 13px rgba(34,211,238,.12);
+          }
+          60% {
+            border-color:rgba(196,181,253,.84);
+            box-shadow:
+              0 14px 34px rgba(0,0,0,.30),
+              0 0 18px rgba(196,181,253,.22);
+          }
+          68% {
+            border-color:rgba(255,255,255,.96);
+            box-shadow:
+              0 14px 34px rgba(0,0,0,.30),
+              0 0 8px rgba(255,255,255,.34),
+              0 0 22px rgba(103,232,249,.25),
+              inset 0 0 15px rgba(196,181,253,.08);
+          }
+          76% {
+            border-color:rgba(244,114,182,.76);
+            box-shadow:
+              0 14px 34px rgba(0,0,0,.30),
+              0 0 18px rgba(244,114,182,.17);
+          }
+          86% {
+            border-color:rgba(167,139,250,.70);
+          }
+        }
+@keyframes  v81SirCrackPulse  {
+          0%,45%,100% {
+            opacity:.14;
+            stroke-dashoffset:1;
+            filter:brightness(.85);
+          }
+          52% {
+            opacity:.42;
+            stroke-dashoffset:.72;
+          }
+          60% {
+            opacity:1;
+            stroke-dashoffset:0;
+            filter:brightness(1.7);
+          }
+          68% {
+            opacity:.92;
+            stroke-dashoffset:0;
+          }
+          77% {
+            opacity:.38;
+            stroke-dashoffset:-.35;
+          }
+          86% {
+            opacity:.14;
+            stroke-dashoffset:-1;
+          }
+        }
+@keyframes  v81SirBranchPulse  {
+          0%,50%,100% { opacity:.08; stroke-dashoffset:1; }
+          58% { opacity:.34; stroke-dashoffset:.6; }
+          65% { opacity:.88; stroke-dashoffset:0; }
+          74% { opacity:.55; stroke-dashoffset:0; }
+          84% { opacity:.08; stroke-dashoffset:-1; }
+        }
+@keyframes  v81SirCorePulse  {
+          0%,48%,100% { opacity:.10; transform:scale(.5); transform-origin:505px 126px; }
+          57% { opacity:1; transform:scale(1.8); }
+          64% { opacity:.45; transform:scale(.8); }
+          70% { opacity:.95; transform:scale(1.25); }
+          82% { opacity:.10; transform:scale(.5); }
+        }
+@keyframes  v81SirShockwave  {
+          0%,53%,100% { opacity:0; transform:translate(-50%,-50%) scale(.18); }
+          60% { opacity:.95; }
+          78% { opacity:.28; }
+          88% { opacity:0; transform:translate(-50%,-50%) scale(4.4); }
+        }
+@keyframes  v81SirBurstA  {
+          0%,52%,100% { opacity:0; transform:scale(.25) rotate(0deg); }
+          60% { opacity:1; transform:scale(1.55) rotate(25deg); }
+          68% { opacity:.28; transform:scale(.75) rotate(38deg); }
+          74% { opacity:.85; transform:scale(1.12) rotate(48deg); }
+          84% { opacity:0; transform:scale(1.8) rotate(62deg); }
+        }
+@keyframes  v81SirBurstB  {
+          0%,57%,100% { opacity:0; transform:scale(.25) rotate(45deg); }
+          65% { opacity:.92; transform:scale(1.35) rotate(68deg); }
+          73% { opacity:.22; }
+          79% { opacity:.75; transform:scale(1) rotate(82deg); }
+          88% { opacity:0; transform:scale(1.65) rotate(98deg); }
+        }
+@keyframes  futureOrbit  { to {transform:rotate(360deg)} }
+@keyframes  futureData  { 0%,100%{opacity:.22} 50%{opacity:.72} }
+@keyframes  futureNode  { 0%,100%{opacity:.4;transform:scale(.8)} 50%{opacity:1;transform:scale(1.25)} }
+@keyframes  futureBadgeShift  { 0%,100%{background-position:0% 50%} 50%{background-position:100% 50%} }
+@keyframes  futureScan  { from{transform:translateY(-60%)} to{transform:translateY(680%)} }
+@keyframes  futureGlint  { 0%,58%{left:-85%;opacity:0} 66%{opacity:.5} 82%,100%{left:145%;opacity:0} }
+@keyframes  futureCardBreath  { 0%,100%{box-shadow:0 0 0 1px rgba(57,216,255,.12),0 0 22px rgba(0,225,255,.18),0 16px 45px rgba(3,6,30,.42)} 50%{box-shadow:0 0 0 1px rgba(57,216,255,.3),0 0 38px rgba(0,225,255,.34),0 16px 45px rgba(3,6,30,.42)} }
+@keyframes  futureCornerPulse  { 0%,100%{opacity:.5} 50%{opacity:1} }
+@keyframes  futureRadar  { 0%,100%{opacity:.4;transform:scale(.93)} 50%{opacity:.9;transform:scale(1.08)} }
+@keyframes  marElectricStrike  {0%,7%,10%,12%,14%,47%,50%,52%,100%{opacity:0}8%,9%,13%,48%,49%,51%{opacity:1}11%{opacity:.42}}
+@keyframes  sirFoilTurn  {to{transform:rotate(360deg)}}
+@keyframes  sirFoilSweep  {0%,100%{translate:-55% 0;opacity:.22}50%{translate:135% 0;opacity:.9}}
+@keyframes  sirStarTwinkle  {0%,100%{opacity:.18;scale:.65}48%{opacity:1;scale:1.12}60%{opacity:.65;scale:1}}
+@keyframes  sirBadgeFoil  {0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+@keyframes  marStormBreath  {0%,100%{opacity:.35}50%{opacity:1}}
+@keyframes  marCoilPulse  {
+          0%,100% {opacity:.76;filter:brightness(.94)}
+          17% {opacity:.93;filter:brightness(1.22)}
+          19% {opacity:.81;filter:brightness(1)}
+          21% {opacity:1;filter:brightness(1.9)}
+          23% {opacity:.8;filter:brightness(1)}
+          58% {opacity:.88;filter:brightness(1.1)}
+          61% {opacity:1;filter:brightness(1.65)}
+          64% {opacity:.77;filter:brightness(.96)}
+        }
+@keyframes  marCoilAura  {
+          from {opacity:.6} to {opacity:1}
+        }
 `}</style>
   )
 }
@@ -6803,7 +8508,7 @@ export default function HomePage() {
 
   const featuredHit = featuredHits[featuredIndex] || null
   const tier = getTierStyle(featuredHit?.hit_tier || null)
-  const showCosmic = ['ir', 'mar', 'gold', 'sir'].includes(
+  const showCosmic = ['ir', 'mar', 'future', 'gold', 'sir'].includes(
     String(featuredHit?.hit_tier || '').toLowerCase()
   )
   const featuredBreakInfo = getBreakInfo(featuredHit?.break_name || null)
@@ -7290,6 +8995,7 @@ export default function HomePage() {
           animation: fastSweep 2.5s infinite;
         }
 
+        .tier-future, .hit-future { border-color: rgba(34,211,238,.7); background: linear-gradient(135deg,rgba(8,47,73,.45),rgba(88,28,135,.38)); box-shadow: 0 0 26px rgba(34,211,238,.22); }
         .tier-gold {
           border: 2px solid rgba(250,204,21,.86);
           background:
