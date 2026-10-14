@@ -86,17 +86,14 @@ function canonicalSetName(name: string | null) {
   return match || cleaned
 }
 
-function getBreakInfo(name: string | null) {
-  const cleaned = String(name || '')
-    .replace(/[^\w\s]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-
-  const breakMatch = cleaned.match(/Break\s+(\d+)/i)
-
+function getBreakInfo(name: string | null, streamDatetime?: string | null) {
+  const rawName = String(name || '')
+  // Read only the saved break name. Do not infer numbers from dates or pack quantities.
+  const explicit = rawName.match(/\bBreak\s*#?\s*(\d+)\b/i)
+  const numberedSuffix = rawName.match(/#\s*(\d+)\b/)
   return {
-    setName: canonicalSetName(cleaned),
-    breakNumber: breakMatch?.[1] || '',
+    setName: canonicalSetName(rawName),
+    breakNumber: explicit?.[1] || numberedSuffix?.[1] || '',
   }
 }
 
@@ -858,7 +855,7 @@ export default function VaultPage() {
 
   function HitCard({ hit }: { hit: any }) {
     const tierClass = getTierClass(hit.hit_tier)
-    const breakInfo = getBreakInfo(hit.break_name)
+    const breakInfo = getBreakInfo(hit.break_name, hit.stream_datetime)
     const resolvedCardName = imageVariantName(hit.hit_name || hit.spot_name, hit.hit_tier)
     const displayCardName = visibleCardName(hit.hit_name || hit.spot_name, hit.hit_tier)
     const imageUrl = resolveCollectorHitImage(

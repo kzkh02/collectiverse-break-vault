@@ -73,15 +73,14 @@ function canonicalSetName(name: string | null) {
   return match || cleaned
 }
 
-function getBreakInfo(name: string | null) {
-  const cleaned = String(name || '')
-    .replace(/[^\w\s]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-  const breakMatch = cleaned.match(/Break\s+(\d+)/i)
+function getBreakInfo(name: string | null, streamDatetime?: string | null) {
+  const rawName = String(name || '')
+  // Read only the saved break name. Do not infer numbers from dates or pack quantities.
+  const explicit = rawName.match(/\bBreak\s*#?\s*(\d+)\b/i)
+  const numberedSuffix = rawName.match(/#\s*(\d+)\b/)
   return {
-    setName: canonicalSetName(cleaned),
-    breakNumber: breakMatch?.[1] || '',
+    setName: canonicalSetName(rawName),
+    breakNumber: explicit?.[1] || numberedSuffix?.[1] || '',
   }
 }
 
@@ -345,7 +344,7 @@ function RarityEffects({ tier }: { tier: string }) {
 
 function ArchiveFeaturedHitCard({ hit, imageUrl }: { hit: any; imageUrl: string }) {
   const tierClass = getTierClass(hit?.hit_tier || null)
-  const breakInfo = getBreakInfo(hit?.break_name || null)
+  const breakInfo = getBreakInfo(hit?.break_name || null, hit?.stream_datetime)
   const resolvedCardName = cardVariantName(hit?.hit_name || hit?.spot_name || '', hit?.hit_tier || null)
   const displayCardName = visibleCardName(hit?.hit_name || hit?.spot_name || '', hit?.hit_tier)
 
@@ -8444,13 +8443,8 @@ export default function HomePage() {
       // Newest calendar date first.
       if (bDay !== aDay) return bDay - aDay
 
-      const getBreakNumber = (name: unknown) => {
-        const matches = [...String(name || '').matchAll(/\bBreak\s*(\d+)\b/gi)]
-        return matches.length ? Number(matches[matches.length - 1][1]) : 0
-      }
-
       // On the same date, highest break number first.
-      const breakDiff = getBreakNumber(b.break_name) - getBreakNumber(a.break_name)
+      const breakDiff = Number(getBreakInfo(b.break_name, b.stream_datetime).breakNumber || 0) - Number(getBreakInfo(a.break_name, a.stream_datetime).breakNumber || 0)
       if (breakDiff !== 0) return breakDiff
 
       // Keep the original database order for cards within the same break.
@@ -8483,7 +8477,7 @@ export default function HomePage() {
 
   function imageForHit(hit: any) {
     if (!hit) return ''
-    const info = getBreakInfo(hit.break_name)
+    const info = getBreakInfo(hit.break_name, hit.stream_datetime)
     return resolveHitImage(
       hitImages,
       info.setName,
@@ -8511,7 +8505,7 @@ export default function HomePage() {
   const showCosmic = ['ir', 'mar', 'future', 'gold', 'sir'].includes(
     String(featuredHit?.hit_tier || '').toLowerCase()
   )
-  const featuredBreakInfo = getBreakInfo(featuredHit?.break_name || null)
+  const featuredBreakInfo = getBreakInfo(featuredHit?.break_name || null, featuredHit?.stream_datetime)
   const featuredImage = imageForHit(featuredHit)
   const carouselRecentHits = recentHits.filter((hit: any) => !isGenericGroupedHit(hit))
   const recentLoop =
@@ -10672,7 +10666,7 @@ export default function HomePage() {
             >
               <div ref={recentTrackRef} className="recent-track">
                 {recentLoop.map((hit, index) => {
-                  const info = getBreakInfo(hit.break_name)
+                  const info = getBreakInfo(hit.break_name, hit.stream_datetime)
                   const imageUrl = imageForHit(hit)
                   return (
                     <div className="recent-card" key={`${hit.id}-${index}`}>
@@ -10689,7 +10683,7 @@ export default function HomePage() {
                       <div className="recent-name">{visibleCardName(hit.hit_name || hit.spot_name, hit.hit_tier)}</div>
                       <div className="recent-owner">{hit.collector_name}</div>
                       <div className="recent-meta">
-                        <span className="recent-set-name">{info.setName}</span>{info.breakNumber ? ` · Break ${info.breakNumber}` : ''}<br />
+                        <span className="recent-set-name">{info.setName}</span>{info.breakNumber && <span className="recent-break-number">{' · Break '}{info.breakNumber}</span>}<br />
                         {formatShortDate(hit.stream_datetime)}
                       </div>
                     </div>

@@ -51,7 +51,7 @@ export default function AdminPage() {
           href: '/admin/performance',
           emoji: '👑',
           title: 'Business Performance',
-          desc: 'Owner-only combined dashboard for Breaks, Singles, payruns, calendar and profit.',
+          desc: 'Owner-only dashboard for sales, purchases, stock, calendar and profit.',
           status: 'Owner Only',
         }] : []),
         {
@@ -73,20 +73,6 @@ export default function AdminPage() {
           emoji: '🖼️',
           title: 'Sets & Hit Images',
           desc: 'Manage set hit lists, upload card images and track image completion.',
-          status: 'Live',
-        },
-        {
-          href: '/admin/streams',
-          emoji: '🎛️',
-          title: 'Breaks Centre',
-          desc: 'Break stock, purchases and stream entry.',
-          status: 'Live',
-        },
-        {
-          href: '/admin/singles',
-          emoji: '🛒',
-          title: 'Singles Centre',
-          desc: 'Collections, tracked cards, sealed stock, giveaways and sales entry.',
           status: 'Live',
         },
       ],
@@ -129,7 +115,7 @@ export default function AdminPage() {
           status: 'Coming Soon',
         },
         {
-          href: '/admin/singles',
+          href: '/admin/buy-cards',
           emoji: '🛒',
           title: 'Singles Store',
           desc: 'Future singles storefront and stock management tools.',
@@ -367,7 +353,7 @@ export default function AdminPage() {
           <section className="hero">
             <div className="hero-title">⚙️ Collectiverse Admin</div>
             <div className="hero-copy">
-              Manage Break Vault operations now, with inventory, singles, buylist tools,
+              Manage Break Vault operations now, with unified inventory, sales, buylist tools,
               collector profiles and platform settings ready to expand as Collectiverse grows.
             </div>
           </section>

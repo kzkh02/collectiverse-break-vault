@@ -4,8 +4,9 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import OwnerGuard from '../owner-guard'
 import { supabase } from '../../../lib/supabase'
+import InventoryOperations from './inventory-operations'
 
-type Tab = 'overview' | 'calendar' | 'breaks'
+type Tab = 'overview' | 'calendar' | 'purchases' | 'stock' | 'entry'
 
 type BreakStream = {
   id: string
@@ -264,6 +265,38 @@ export default function OwnerPerformancePage() {
     packs: rows.reduce((sum, row) => sum + (packsOnlyByStream.get(row.id) || 0), 0),
   })
 
+  const soldQuantitiesByStream = useMemo(() => {
+    const map = new Map<string, { packs: number; singles: number }>()
+    breakProducts.forEach(row => {
+      const type = row.stream_sets?.item_type || 'packs'
+      if (type !== 'packs' && type !== 'singles') return
+      const current = map.get(row.stream_id) || { packs: 0, singles: 0 }
+      current[type] += num(row.packs_used)
+      map.set(row.stream_id, current)
+    })
+    return map
+  }, [breakProducts])
+
+  function daySoldQuantities(date: string) {
+    return breaks.filter(stream => stream.stream_date === date).reduce(
+      (total, stream) => {
+        const sold = soldQuantitiesByStream.get(stream.id)
+        total.packs += sold?.packs || 0
+        total.singles += sold?.singles || 0
+        return total
+      }, { packs: 0, singles: 0 }
+    )
+  }
+
+  function daySalesLabel(date: string) {
+    const sold = daySoldQuantities(date)
+    const parts = [
+      sold.packs > 0 ? `Packs · ${sold.packs} sold` : '',
+      sold.singles > 0 ? `Singles · ${sold.singles} sold` : '',
+    ].filter(Boolean)
+    return parts.join(' · ') || 'No stream'
+  }
+
   const summariseSingles = (rows: SinglesSale[]): SinglesSummary => {
     let cardsSold = 0
     let sealedSold = 0
@@ -380,6 +413,11 @@ export default function OwnerPerformancePage() {
       })
       .sort((a, b) => b.profit - a.profit)
   }, [breaks, singles, packsOnlyByStream, sealed])
+
+  const bestStreams = useMemo(
+    () => [...breaks].sort((a, b) => num(b.profit) - num(a.profit)).slice(0, 10),
+    [breaks]
+  )
 
   const bestBreakStream = useMemo(
     () => [...breaks].sort((a, b) => num(b.profit) - num(a.profit))[0],
@@ -807,13 +845,11 @@ export default function OwnerPerformancePage() {
             <div>
               <div className="eyebrow">Owner Dashboard</div>
               <h1>Business Performance</h1>
-              <div className="sub">The numbers that matter across Breaks and Singles.</div>
+              <div className="sub">Sales, stock and performance in one place.</div>
             </div>
 
             <div className="actions">
               <Link className="button" href="/admin">← Admin</Link>
-              <Link className="button" href="/admin/streams">Break Operations</Link>
-              <Link className="button" href="/admin/singles-centre">Singles Centre</Link>
               <button className="button" onClick={loadData}>Refresh</button>
             </div>
           </header>
@@ -821,7 +857,9 @@ export default function OwnerPerformancePage() {
           <nav className="tabs">
             <button className={`tab ${tab === 'overview' ? 'active' : ''}`} onClick={() => setTab('overview')}>Dashboard</button>
             <button className={`tab ${tab === 'calendar' ? 'active' : ''}`} onClick={() => setTab('calendar')}>Combined Calendar</button>
-            <button className={`tab ${tab === 'breaks' ? 'active' : ''}`} onClick={() => setTab('breaks')}>Break Performance</button>
+            <button className={`tab ${tab === 'entry' ? 'active' : ''}`} onClick={() => setTab('entry')}>Record Stream</button>
+            <button className={`tab ${tab === 'purchases' ? 'active' : ''}`} onClick={() => setTab('purchases')}>Purchases</button>
+            <button className={`tab ${tab === 'stock' ? 'active' : ''}`} onClick={() => setTab('stock')}>Stock</button>
           </nav>
 
           {message && <div className="message">{message}</div>}
@@ -842,12 +880,12 @@ export default function OwnerPerformancePage() {
                     </div>
 
                     <div className="stats-grid">
-                      <StatCard label="Gross Sales" value={money(allBreaks.gross + allSingles.gross)} sub={`Breaks ${money(allBreaks.gross)} · Singles ${money(allSingles.gross)}`} />
+                      <StatCard label="Gross Sales" value={money(allBreaks.gross + allSingles.gross)}  />
                       <StatCard label="Net Sales" value={money(allBreaks.net + allSingles.net)} />
-                      <StatCard label="Total Profit" value={money(totalProfit)} positive sub={`Breaks ${money(allBreaks.profit)} · Singles ${money(allSingles.profit)}`} />
+                      <StatCard label="Total Profit" value={money(totalProfit)} positive />
                       <StatCard label="Inventory Value" value={money(inventoryValue)} />
                       <StatCard label="Break Streams" value={String(allBreaks.streams)} sub={`${allBreaks.packs} packs used`} />
-                      <StatCard label="Singles Sold" value={String(allSingles.items)} sub={`${allSingles.cards} cards · ${allSingles.sealed} sealed`} />
+
                     </div>
                   </section>
 
@@ -869,9 +907,24 @@ export default function OwnerPerformancePage() {
                       <div className="stats-grid">
                         <StatCard label="Best Combined Day" value={combinedDailyRows[0] ? money(combinedDailyRows[0].profit) : money(0)} positive sub={combinedDailyRows[0] ? shortDate(combinedDailyRows[0].date) : 'No data'} />
                         <StatCard label="Best Break Stream" value={bestBreakStream ? money(bestBreakStream.profit) : money(0)} positive sub={bestBreakStream ? shortDate(bestBreakStream.stream_date) : 'No data'} />
-                        <StatCard label="Break Profit Share" value={`${totalProfit ? decimal((allBreaks.profit / totalProfit) * 100) : '0.0'}%`} />
-                        <StatCard label="Singles Profit Share" value={`${totalProfit ? decimal((allSingles.profit / totalProfit) * 100) : '0.0'}%`} />
+
+
                       </div>
+                    </section>
+                    <section className="panel">
+                      <div className="eyebrow">All-time rankings</div>
+                      <h2>Top 10 Best Streams</h2>
+                      {bestStreams.length === 0 ? (
+                        <p className="muted">No streams recorded yet.</p>
+                      ) : bestStreams.map((stream, index) => (
+                        <div className="table-row compact" key={stream.id}>
+                          <div><span className="rank">{index + 1}</span>{shortDate(stream.stream_date)}{num(stream.stream_slot) > 1 ? ` · Stream ${stream.stream_slot}` : ''}</div>
+                          <div><span>Gross</span> {money(stream.sales)}</div>
+                          <div><span>Net</span> {money(stream.sales_after_fees)}</div>
+                          <div><span>Packs</span> {packsOnlyByStream.get(stream.id) || 0}</div>
+                          <div className="positive"><span>Profit</span> {money(stream.profit)}</div>
+                        </div>
+                      ))}
                     </section>
                   </div>
                 </>
@@ -917,7 +970,7 @@ export default function OwnerPerformancePage() {
                       <StatCard
                         label="Activity"
                         value={`${currentPayrunSummary.breaks.streams} / ${currentPayrunSummary.singles.transactions}`}
-                        sub="Break streams / singles sales"
+                        sub="Streams / other sales"
                       />
                     </div>
 
@@ -940,7 +993,7 @@ export default function OwnerPerformancePage() {
                     <div className="section-head">
                       <div>
                         <div className="eyebrow">Combined calendar</div>
-                        <h2>Breaks + Singles</h2>
+                        <h2>All Sales</h2>
                       </div>
                       <div className="muted">Click any day for its performance</div>
                     </div>
@@ -957,8 +1010,8 @@ export default function OwnerPerformancePage() {
                               <span>{parseDate(day.key).toLocaleDateString('en-GB', { weekday: 'short' })}</span>
                               <strong>{parseDate(day.key).getDate()}</strong>
                               <strong className="profit">{money(day.profit)}</strong>
-                              <span>Breaks {money(day.breakSummary.profit)}</span>
-                              <span>Singles {money(day.singlesSummary.profit)}</span>
+                              <span>{daySalesLabel(day.key)}</span>
+                              {day.singlesSummary.transactions > 0 && <span>Other sales · {money(day.singlesSummary.profit)}</span>}
                             </button>
                           ))}
                         </div>
@@ -973,60 +1026,15 @@ export default function OwnerPerformancePage() {
                       <StatCard label="Gross" value={money(dayBreaks.gross + daySingles.gross)} />
                       <StatCard label="Net" value={money(dayBreaks.net + daySingles.net)} />
                       <StatCard label="Profit" value={money(dayBreaks.profit + daySingles.profit)} positive />
-                      <StatCard label="Breaks" value={money(dayBreaks.profit)} sub={`${dayBreaks.streams} streams · ${dayBreaks.packs} packs`} />
-                      <StatCard label="Singles" value={money(daySingles.profit)} sub={`${daySingles.cards} cards · ${daySingles.sealed} sealed`} />
+                      <StatCard label="Streams" value={String(dayBreaks.streams)} sub={daySalesLabel(selectedDate)} />
+                      {daySingles.transactions > 0 && <StatCard label="Other Sales" value={money(daySingles.profit)} sub={`${daySingles.items} items`} />}
                     </div>
                   </section>
                 </>
               )}
 
-              {tab === 'breaks' && (
-                <>
-                  <section className="panel hero">
-                    <div className="section-head">
-                      <div>
-                        <div className="eyebrow">Break performance</div>
-                        <h2>Break Operations</h2>
-                      </div>
-                      <div className="muted">{allBreaks.streams} streams · {allBreaks.packs} packs</div>
-                    </div>
-
-                    <div className="stats-grid">
-                      <StatCard label="Gross Sales" value={money(allBreaks.gross)} />
-                      <StatCard label="Net Sales" value={money(allBreaks.net)} />
-                      <StatCard label="Profit" value={money(allBreaks.profit)} positive />
-                      <StatCard label="Margin" value={`${allBreaks.net ? decimal((allBreaks.profit / allBreaks.net) * 100) : '0.0'}%`} />
-                      <StatCard label="Avg Profit / Stream" value={money(allBreaks.streams ? allBreaks.profit / allBreaks.streams : 0)} positive />
-                      <StatCard label="Avg Packs / Stream" value={decimal(allBreaks.streams ? allBreaks.packs / allBreaks.streams : 0)} />
-                    </div>
-                  </section>
-
-                  <section className="panel">
-                    <div className="section-head">
-                      <div>
-                        <div className="eyebrow">Top streams</div>
-                        <h2>Highest Profit Breaks</h2>
-                      </div>
-                      <div className="muted">Top 10 all time</div>
-                    </div>
-
-                    <div className="table">
-                      {[...breaks].sort((a, b) => num(b.profit) - num(a.profit)).slice(0, 10).map((row, index) => (
-                        <div className="table-row compact" key={row.id}>
-                          <strong>
-                            <span className="rank">{index + 1}</span>
-                            {shortDate(row.stream_date)}
-                            {row.stream_slot ? ` · Stream ${row.stream_slot}` : ''}
-                          </strong>
-                          <span>Sales {money(row.sales)}</span>
-                          <span>Net {money(row.sales_after_fees)}</span>
-                          <span className="positive">Profit {money(row.profit)}</span>
-                          <span>{packsOnlyByStream.get(row.id) || 0} packs</span>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-                </>
+              {(tab === 'entry' || tab === 'purchases' || tab === 'stock') && (
+                <InventoryOperations view={tab} onSaved={loadData} />
               )}
 
             </>
