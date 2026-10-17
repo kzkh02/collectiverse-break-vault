@@ -91,6 +91,16 @@ function normaliseImageKey(value: string) {
 // Canonical image matching: old entries can contain emojis, bracketed spot metadata,
 // "Extra Hit" suffixes, punctuation, or a rarity already embedded in the name.
 // None of those should stop the same card image resolving across the Vault.
+// The 30th Celebration CLC spot names were updated. Preserve older database
+// entries while showing and matching the full card names.
+function updatedClcName(value: string, tier?: string | null) {
+  if (String(tier || '').toLowerCase() !== 'clc') return value
+  const trimmed = String(value || '').replace(/^[^A-Za-z0-9]+/, '').replace(/\s*\([^)]*\)\s*$/, '').trim()
+  if (/^gardevoir(?:\s+clc)?$/i.test(trimmed)) return 'M Gardevoir'
+  if (/^crobat(?:\s+clc)?$/i.test(trimmed)) return 'Crobat G'
+  return value
+}
+
 function canonicalImageName(value: string) {
   return String(value || '')
     .normalize('NFKD')
@@ -111,7 +121,7 @@ function resolveHitImage(
 ) {
   const setKey = normaliseImageKey(setName)
   const tierLabel = getTierStyle(tier).label
-  const cleanBase = canonicalImageName(rawName)
+  const cleanBase = canonicalImageName(updatedClcName(rawName, tier))
     .replace(/\s+(sir|gold|future|mar|ir|sr|ex|clc)$/i, '')
     .trim()
   let cleanTier = canonicalImageName(tierLabel)
@@ -149,6 +159,12 @@ function resolveHitImage(
 
     if (canonicalRow === wanted || canonicalRowVariant === wanted) return url
 
+    // Fallback for image rows still stored under the previous CLC names.
+    if (cleanTier === 'clc') {
+      const oldName = cleanBase === 'm gardevoir' ? 'gardevoir' : cleanBase === 'crobat g' ? 'crobat' : ''
+      if (oldName && (canonicalRow === `${oldName} clc` || canonicalRowVariant === `${oldName} clc` || (canonicalRow === oldName && /\(CLC\)\s*$/i.test(rowCard)))) return url
+    }
+
     // Legacy split-card images were uploaded as e.g. "Salazzle (IR)".
     // canonicalImageName intentionally strips "(IR)", so explicitly recognise
     // that old format ONLY when the bracketed tier matches the current hit tier.
@@ -177,7 +193,7 @@ function baseCardName(value: string) {
 
 function cardVariantName(value: string, tier: string | null) {
   const labels: Record<string, string> = { sir: 'SIR', gold: 'GOLD', future: 'FUTURE', mar: 'MAR', ir: 'IR', sr: 'SR', ex: 'EX' }
-  const base = baseCardName(value)
+  const base = updatedClcName(baseCardName(value), tier)
   const label = labels[String(tier || '').toLowerCase()] || String(tier || '').replace(/_/g, ' ').toUpperCase()
   return tier ? `${base} ${label}`.trim() : base
 }
@@ -195,7 +211,7 @@ function visibleCardName(value: string, tier?: string | null) {
   // Venusaur EX + SIR badge -> Venusaur
   // Zapdos EX + EX badge -> Zapdos
   // The stored hit_name is NOT changed, so image matching remains intact.
-  return cleaned.replace(/\s+EX$/i, '').trim()
+  return updatedClcName(cleaned.replace(/\s+EX$/i, '').trim(), tier)
 }
 
 function formatShortDate(value: string | null) {

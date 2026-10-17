@@ -101,6 +101,16 @@ function normaliseImageKey(value: string) {
   return value.toLowerCase().trim().replace(/\s+/g, ' ')
 }
 
+// The 30th Celebration CLC spot names were updated. Preserve older database
+// entries while showing and matching the full card names.
+function updatedClcName(value: string, tier?: string | null) {
+  if (String(tier || '').toLowerCase() !== 'clc') return value
+  const trimmed = String(value || '').replace(/^[^A-Za-z0-9]+/, '').replace(/\s*\([^)]*\)\s*$/, '').trim()
+  if (/^gardevoir(?:\s+clc)?$/i.test(trimmed)) return 'M Gardevoir'
+  if (/^crobat(?:\s+clc)?$/i.test(trimmed)) return 'Crobat G'
+  return value
+}
+
 function canonicalImageName(value: string) {
   return String(value || '')
     .normalize('NFKD')
@@ -121,7 +131,7 @@ function resolveCollectorHitImage(
 ) {
   const setKey = normaliseImageKey(setName)
   const tierLabel = tierLabels[String(tier || '').toLowerCase()] || String(tier || '').replace(/_/g, ' ').toUpperCase()
-  const cleanBase = canonicalImageName(rawName)
+  const cleanBase = canonicalImageName(updatedClcName(rawName, tier))
     .replace(/\s+(sir|gold|future|mar|ir|sr|ex|clc)$/i, '')
     .trim()
   let cleanTier = canonicalImageName(tierLabel)
@@ -152,6 +162,12 @@ function resolveCollectorHitImage(
 
     if (canonicalRow === wanted || canonicalRowVariant === wanted) return url
 
+    // Fallback for image rows still stored under the previous CLC names.
+    if (cleanTier === 'clc') {
+      const oldName = cleanBase === 'm gardevoir' ? 'gardevoir' : cleanBase === 'crobat g' ? 'crobat' : ''
+      if (oldName && (canonicalRow === `${oldName} clc` || canonicalRowVariant === `${oldName} clc` || (canonicalRow === oldName && /\(CLC\)\s*$/i.test(rowCard)))) return url
+    }
+
     // Legacy split-card images were uploaded as e.g. "Salazzle (IR)".
     // Only use that legacy row when its bracketed tier matches this hit.
     const legacyBracketTier = String(rowCard).match(/\((SIR|GOLD|FUTURE|MAR|IR|SR|EX|CLC)\)\s*$/i)?.[1] || ''
@@ -181,7 +197,7 @@ function baseCardName(value: string) {
 }
 
 function cardVariantName(value: string, tier: string | null) {
-  const base = baseCardName(value)
+  const base = updatedClcName(baseCardName(value), tier)
   const label = tierLabels[String(tier || '').toLowerCase()] || String(tier || '').replace(/_/g, ' ').toUpperCase()
   return tier ? `${base} ${label}`.trim() : base
 }
@@ -201,7 +217,7 @@ function visibleCardName(value: string, tier?: string | null) {
 
   // The rarity is already shown in the tier badge.
   // Keep stored hit_name unchanged; only remove the redundant visible EX suffix.
-  return cleaned.replace(/\s+EX$/i, '').trim()
+  return updatedClcName(cleaned.replace(/\s+EX$/i, '').trim(), tier)
 }
 
 function getTierClass(tier: string | null) {
