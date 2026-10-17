@@ -415,7 +415,7 @@ export default function OwnerPerformancePage() {
   }, [breaks, singles, packsOnlyByStream, sealed])
 
   const bestStreams = useMemo(
-    () => [...breaks].sort((a, b) => num(b.profit) - num(a.profit)).slice(0, 10),
+    () => [...breaks].sort((a, b) => num(b.profit) - num(a.profit)).slice(0, 20),
     [breaks]
   )
 
@@ -911,21 +911,23 @@ export default function OwnerPerformancePage() {
 
                       </div>
                     </section>
-                    <section className="panel">
-                      <div className="eyebrow">All-time rankings</div>
-                      <h2>Top 10 Best Streams</h2>
-                      {bestStreams.length === 0 ? (
-                        <p className="muted">No streams recorded yet.</p>
-                      ) : bestStreams.map((stream, index) => (
-                        <div className="table-row compact" key={stream.id}>
-                          <div><span className="rank">{index + 1}</span>{shortDate(stream.stream_date)}{num(stream.stream_slot) > 1 ? ` · Stream ${stream.stream_slot}` : ''}</div>
-                          <div><span>Gross</span> {money(stream.sales)}</div>
-                          <div><span>Net</span> {money(stream.sales_after_fees)}</div>
-                          <div><span>Packs</span> {packsOnlyByStream.get(stream.id) || 0}</div>
-                          <div className="positive"><span>Profit</span> {money(stream.profit)}</div>
-                        </div>
-                      ))}
-                    </section>
+                    {[bestStreams.slice(0, 10), bestStreams.slice(10, 20)].map((group, groupIndex) => (
+                      <section className="panel" key={groupIndex}>
+                        <div className="eyebrow">All-time rankings</div>
+                        <h2>{groupIndex === 0 ? 'Top 10 Best Streams' : 'Best Streams 11–20'}</h2>
+                        {group.length === 0 ? (
+                          <p className="muted">{groupIndex === 0 ? 'No streams recorded yet.' : 'More streams will appear here as they are recorded.'}</p>
+                        ) : group.map((stream, index) => (
+                          <div className="table-row compact" key={stream.id}>
+                            <div><span className="rank">{groupIndex * 10 + index + 1}</span>{shortDate(stream.stream_date)}{num(stream.stream_slot) > 1 ? ` · Stream ${stream.stream_slot}` : ''}</div>
+                            <div><span>Gross</span> {money(stream.sales)}</div>
+                            <div><span>Net</span> {money(stream.sales_after_fees)}</div>
+                            <div><span>Packs</span> {packsOnlyByStream.get(stream.id) || 0}</div>
+                            <div className="positive"><span>Profit</span> {money(stream.profit)}</div>
+                          </div>
+                        ))}
+                      </section>
+                    ))}
                   </div>
                 </>
               )}
