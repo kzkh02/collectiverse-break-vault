@@ -54,6 +54,13 @@ export default function AdminPage() {
           desc: 'Owner-only dashboard for sales, purchases, stock, calendar and profit.',
           status: 'Owner Only',
         }] : []),
+        ...(isOwner ? [{
+          href: '/admin/packaging',
+          emoji: '📦',
+          title: 'Packaging Assistant',
+          desc: 'Import a Whatnot show CSV and prepare hits, bulk and giveaways for packing.',
+          status: 'Owner Only',
+        }] : []),
         {
           href: '/admin/import',
           emoji: '📥',
