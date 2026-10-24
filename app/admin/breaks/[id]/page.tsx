@@ -131,6 +131,10 @@ function spotChoiceKey(value: string) {
   return cleanSpotLabel(value).toLowerCase().replace(/[’]/g, "'").replace(/\s+/g, ' ').trim()
 }
 
+function isDarkraiCresseliaSpot(value: string) {
+  return /^darkrai\s*&\s*cresselia(?:\s+legend)?(?:\s*\(clc\))?$/i.test(spotChoiceKey(value))
+}
+
 function isAscendedBreak(name: string | null | undefined) {
   return String(name || '').toLowerCase().includes('ascended')
 }
@@ -182,7 +186,9 @@ function choicesForAscendedSpot(spotName: string): string[] {
   // Darkrai & Cresselia CLC has two separate artworks: Top and Bottom.
   if (
     key === 'darkrai & cresselia' ||
-    key === 'darkrai & cresselia (clc)'
+    key === 'darkrai & cresselia (clc)' ||
+    key === 'darkrai & cresselia legend' ||
+    key === 'darkrai & cresselia legend (clc)'
   ) {
     return ['Darkrai & Cresselia Top', 'Darkrai & Cresselia Bottom']
   }
@@ -372,6 +378,7 @@ export default function BreakPage() {
       choicesForAscendedSpot(spotName)
     const chosenNames = (explicitHitNames || selectedHitNames[entryId] || [])
       .filter(Boolean)
+      .slice(0, isDarkraiCresseliaSpot(spotName) ? 1 : undefined)
       .map((name) => {
         // Split/grouped spots save the actual selected card name.
         // Tier is stored separately in hit_tier, so don't duplicate it in hit_name.
@@ -476,7 +483,7 @@ export default function BreakPage() {
     }
 
     const choices = choicesForAscendedSpot(entry.spot_name)
-    const chosenNames = (selectedHitNames[entry.id] || []).filter(Boolean)
+    const chosenNames = (selectedHitNames[entry.id] || []).filter(Boolean).slice(0, isDarkraiCresseliaSpot(entry.spot_name) ? 1 : undefined)
 
     if (choices.length > 0 && chosenNames.length === 0) {
       setMessage('Choose the actual card pulled before adding an extra hit.')

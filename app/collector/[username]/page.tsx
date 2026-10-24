@@ -132,7 +132,7 @@ function resolveCollectorHitImage(
   const setKey = normaliseImageKey(setName)
   const tierLabel = tierLabels[String(tier || '').toLowerCase()] || String(tier || '').replace(/_/g, ' ').toUpperCase()
   const cleanBase = canonicalImageName(updatedClcName(rawName, tier))
-    .replace(/\s+(sir|gold|future|mar|ir|sr|ex|clc)$/i, '')
+    .replace(/\s+(sir|gold|future|fur|mar|ir|sr|ex|clc)$/i, '')
     .trim()
   let cleanTier = canonicalImageName(tierLabel)
 
@@ -155,7 +155,7 @@ function resolveCollectorHitImage(
     const rowCard = key.slice(separator + 2)
     if (normaliseImageKey(rowSet) !== setKey) continue
 
-    const canonicalRow = canonicalImageName(rowCard)
+    const canonicalRow = canonicalImageName(rowCard).replace(/\s+fur$/, ' future')
     const canonicalRowVariant = canonicalRow
       .replace(/\s+ex\s+(sir|gold|mar|ir|sr|clc)$/i, ' $1')
       .trim()
@@ -228,6 +228,7 @@ function getTierClass(tier: string | null) {
       return 'hit-sir'
     case 'gold':
       return 'hit-gold'
+    case 'fur':
     case 'future':
       return 'hit-future'
     case 'mar':
@@ -251,6 +252,7 @@ function getTierEmoji(tier: string | null) {
       return '👑'
     case 'gold':
       return '🥇'
+    case 'fur':
     case 'future':
       return '⚡'
     case 'mar':

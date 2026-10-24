@@ -11,6 +11,7 @@ function getTierClass(tier: string | null) {
     case 'clc': return 'hit-clc'
     case 'sir': return 'hit-sir'
     case 'gold': return 'hit-gold'
+    case 'fur': return 'hit-future'
     case 'future': return 'hit-future'
     case 'mar': return 'hit-mar'
     case 'ir': return 'hit-ir'
@@ -30,6 +31,7 @@ function getTierStyle(tier: string | null) {
       return { label: 'SIR', className: 'tier-sir', color: '#facc15' }
     case 'gold':
       return { label: 'GOLD', className: 'tier-gold', color: '#facc15' }
+    case 'fur':
     case 'future':
       return { label: 'FUTURE', className: 'tier-future', color: '#22d3ee' }
     case 'mar':
@@ -122,7 +124,7 @@ function resolveHitImage(
   const setKey = normaliseImageKey(setName)
   const tierLabel = getTierStyle(tier).label
   const cleanBase = canonicalImageName(updatedClcName(rawName, tier))
-    .replace(/\s+(sir|gold|future|mar|ir|sr|ex|clc)$/i, '')
+    .replace(/\s+(sir|gold|future|fur|mar|ir|sr|ex|clc)$/i, '')
     .trim()
   let cleanTier = canonicalImageName(tierLabel)
 
@@ -152,7 +154,7 @@ function resolveHitImage(
     const rowCard = key.slice(separator + 2)
     if (normaliseImageKey(rowSet) !== setKey) continue
 
-    const canonicalRow = canonicalImageName(rowCard)
+    const canonicalRow = canonicalImageName(rowCard).replace(/\s+fur$/, ' future')
     const canonicalRowVariant = canonicalRow
       .replace(/\s+ex\s+(sir|gold|mar|ir|sr|clc)$/i, ' $1')
       .trim()

@@ -68,6 +68,8 @@ function canonicalSpotKey(value: string) {
 }
 
 
+const CELEBRATION_SPOTS = ["RGB Mew", "Lugia (CLC)", "Charizard (CLC)", "Mew (SIR, EX)", "Mewtwo (SIR, EX)", "Gengar (SIR, EX)", "Pikachu Day (SIR, EX)", "Pikachu Night (SIR, EX)", "Jirachi (SIR, EX)", "Magikarp (CLC)", "Sylveon (SIR, EX)", "Mew (FUR)", "Mewtwo (FUR)", "Pikachu & Zekrom (CLC)", "Shining Celebi (CLC)", "Pikachu (CLC)", "Gengar Prime (CLC)", "Mew VMAX (CLC)", "Darkrai & Cresselia LEGEND (CLC)", "Rayquaza (CLC)", "Greninja (SIR, CLC, EX)", "Salamance (SIR, EX)", "Fuecoco (SIR, EX)", "N (CLC)", "Misty (CLC)", "M Gardevoir (CLC)", "Dark Tyranitar (CLC)", "Erika's Jigglypuff (CLC)", "Scizor ex (CLC)", "Raikou (CLC)", "Metagross (CLC)", "Palkia LV.X (CLC)", "Arceus (CLC)", "Solgaleo (CLC)", "Crobat G (CLC)", "Genesect (CLC)", "Zacian (CLC)", "Sneasel (CLC)", "Delcatty (CLC)", "Uxie (CLC)", "Buzzwole (CLC)", "Galarian/Alolan/Meowth (IR)", "Maushold (IR)", "Lapras (IR)", "Articuno (IR)", "Zapdos (IR)", "Moltres (IR)", "Hisuian Zorua (IR)", "Morpeko (IR)", "Drifloon (IR)", "Chandelure (IR)", "Toxtricity (IR)", "Alolan Exeggutor (IR)", "Scraggy (IR)", "Gholdengo (IR)", "Kommo-o (IR)", "Lycanroc (IR)", "Umbreon (EX)", "Espeon (EX)", "All Holo Pikachus"]
+
 type CollapsibleCardGroup = {
   parent: string
   cards: string[]
@@ -179,6 +181,11 @@ function parseSpotVariants(spotName: string): CardVariant[] {
     ]
   }
 
+  if (/^all holo pikachus$/i.test(displayClean)) return [{ spotName: clean, baseName: 'All Holo Pikachus', variant: '', cardName: 'All Holo Pikachus' }]
+  if (/^darkrai\s*&\s*cresselia\s+legend\s*\(clc\)$/i.test(clean)) return [
+    { spotName: clean, baseName: 'Darkrai & Cresselia Top', variant: 'CLC', cardName: 'Darkrai & Cresselia Top CLC' },
+    { spotName: clean, baseName: 'Darkrai & Cresselia Bottom', variant: 'CLC', cardName: 'Darkrai & Cresselia Bottom CLC' },
+  ]
   // 30th Anniversary special image structure.
   // IMPORTANT: inspect the ORIGINAL spot text (`clean`) because cleanDisplayCardName()
   // strips terminal rarity brackets such as "(CLC)".
@@ -329,7 +336,7 @@ function parseSpotVariants(spotName: string): CardVariant[] {
     }]
   }
 
-  const variants = inside
+  const variants = inside.replace(/\bFUR\b/gi, 'FUTURE')
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean)
@@ -472,7 +479,7 @@ export default function SetDetailPage() {
       }
     })
 
-    const latestSpots = Array.from(unique.values()).sort((a, b) => a.localeCompare(b))
+    const latestSpots = prettyName === '30th Celebration' ? CELEBRATION_SPOTS : Array.from(unique.values()).sort((a, b) => a.localeCompare(b))
     setSpots(latestSpots)
 
     let parsedCards = latestSpots
