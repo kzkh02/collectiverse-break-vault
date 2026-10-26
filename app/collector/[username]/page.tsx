@@ -424,7 +424,7 @@ export default function VaultPage() {
       }
 
       const breakIds = [
-        ...new Set(allEntries.map((entry) => entry.break_id).filter(Boolean)),
+        ...new Set((allEntries || []).map((entry) => entry.break_id).filter(Boolean)),
       ]
 
       const { data: breaks } =
