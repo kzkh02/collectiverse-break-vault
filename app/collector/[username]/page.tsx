@@ -220,6 +220,15 @@ function visibleCardName(value: string, tier?: string | null) {
   return updatedClcName(cleaned.replace(/\s+EX$/i, '').trim(), tier)
 }
 
+
+// Manual pulls have no CSV entry or break; expose the same display fields.
+function manualToHit(row: any, collectorName = 'Collector') {
+  return { ...row, id: `manual-${row.id}`, is_hit: true, spot_name: row.hit_name,
+    collector_name: String(collectorName).toLowerCase(), break_name: row.break_number ? `${row.set_name} Break ${row.break_number}` : row.set_name,
+    stream_datetime: row.pulled_at, revealed_at: row.pulled_at,
+    featured_hit: false, manual_hit: true }
+}
+
 function getTierClass(tier: string | null) {
   switch (String(tier || '').toLowerCase().trim()) {
     case 'clc':
@@ -399,14 +408,17 @@ export default function VaultPage() {
         return
       }
 
-      setCollector(collectorData)
+      setCollector({ ...collectorData, whatnot_name: String(collectorData.whatnot_name || '').toLowerCase() })
 
       const { data: allEntries } = await supabase
         .from('entries')
         .select('*')
         .eq('collector_id', collectorData.id)
 
-      if (!allEntries || allEntries.length === 0) {
+      const { data: manualRows, error: manualError } = await supabase.from('manual_hits')
+        .select('*').eq('collector_id', collectorData.id).order('pulled_at', { ascending: false })
+      if (manualError) throw manualError
+      if ((!allEntries || allEntries.length === 0) && !(manualRows || []).length) {
         setMessage(MESSAGE_NO_ENTRIES)
         return
       }
@@ -438,7 +450,7 @@ export default function VaultPage() {
         ),
       ]
 
-      setEnteredBreakDates(allEnteredDates)
+      setEnteredBreakDates([...new Set([...allEnteredDates, ...(manualRows || []).map((row: any) => dateValue(row.pulled_at))])])
 
       const { data: allHits } = await supabase
         .from('entries')
@@ -448,11 +460,13 @@ export default function VaultPage() {
         .neq('hit_tier', 'reverse_holo')
         .order('revealed_at', { ascending: false })
 
-      const hitsWithBreaks = (allHits || []).map((hit) => ({
-        ...hit,
-        break_name: breakMap[hit.break_id]?.break_name || 'Unknown Break',
-        stream_datetime: breakMap[hit.break_id]?.stream_datetime || null,
-      }))
+      const hitsWithBreaks = [
+        ...(allHits || []).map((hit) => ({
+          ...hit, break_name: breakMap[hit.break_id]?.break_name || 'Unknown Break',
+          stream_datetime: breakMap[hit.break_id]?.stream_datetime || null,
+        })),
+        ...(manualRows || []).map((row: any) => manualToHit(row, collectorData.whatnot_name)),
+      ].sort((a: any, b: any) => new Date(b.revealed_at || 0).getTime() - new Date(a.revealed_at || 0).getTime())
 
       const setKeys = [
         ...new Set(
@@ -490,9 +504,12 @@ export default function VaultPage() {
         .eq('is_hit', true)
         .neq('hit_tier', 'reverse_holo')
 
+      const { data: allManualHitEntries, error: manualTotalsError } = await supabase
+        .from('manual_hits').select('collector_id, hit_tier')
+      if (manualTotalsError) throw manualTotalsError
       const rawTotals: Record<string, RankTotals> = {}
 
-      ;(allHitEntries || []).forEach((entry) => {
+      ;[...(allHitEntries || []), ...(allManualHitEntries || [])].forEach((entry) => {
         if (!rawTotals[entry.collector_id]) {
           rawTotals[entry.collector_id] = getEmptyRankTotals()
         }
@@ -518,7 +535,7 @@ export default function VaultPage() {
       const demoCollectorIds = new Set<string>()
 
       ;(collectorNames || []).forEach((item) => {
-        collectorNameMap[item.id] = item.whatnot_name
+        collectorNameMap[item.id] = String(item.whatnot_name || '').toLowerCase()
 
         const normalizedName = String(
           item.whatnot_name_normalized || item.whatnot_name || ''
@@ -590,6 +607,7 @@ export default function VaultPage() {
       )
 
       const newestBreak = breaks?.[0]
+      if (!newestBreak && manualRows?.[0]) setSelectedDate(dateValue(manualRows[0].pulled_at))
 
       if (newestBreak) {
         setSelectedDate(dateValue(newestBreak.stream_datetime))

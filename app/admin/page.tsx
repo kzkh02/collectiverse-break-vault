@@ -76,6 +76,13 @@ export default function AdminPage() {
           status: 'Live',
         },
         {
+          href: '/admin/manual-hits',
+          emoji: '🏆',
+          title: 'Manual Hits',
+          desc: 'Add, edit or remove individual historical pulls without CSV imports.',
+          status: 'Live',
+        },
+        {
           href: '/admin/sets',
           emoji: '🖼️',
           title: 'Sets & Hit Images',

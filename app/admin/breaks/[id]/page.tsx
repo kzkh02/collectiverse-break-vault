@@ -7,7 +7,7 @@ import { supabase } from '../../../../lib/supabase'
 
 type FilterMode = 'all' | 'hits' | 'not_hits' | 'featured'
 
-type TierId = '' | 'reverse_holo' | 'ex' | 'sr' | 'ir' | 'mar' | 'future' | 'gold' | 'sir' | 'clc'
+type TierId = '' | 'reverse_holo' | 'ex' | 'sr' | 'ir' | 'mar' | 'future' | 'gold' | 'sir' | 'clc' | 'hr'
 
 type EntryRow = {
   id: string
@@ -40,6 +40,7 @@ const tiers: { id: TierId; label: string; emoji: string }[] = [
   { id: 'future', label: 'Future', emoji: '⚡' },
   { id: 'sir', label: 'SIR', emoji: '👑' },
   { id: 'clc', label: 'CLC', emoji: '🏆' },
+  { id: 'hr', label: 'HR', emoji: '💠' },
 ]
 
 function formatStreamDateTime(value: string | null) {
@@ -162,6 +163,12 @@ function choicesForAscendedSpot(spotName: string): string[] {
     key.startsWith('all other trainers ')
   ) {
     return ASCENDED_SPECIAL_CHOICES['all other trainers']
+  }
+
+  // Legacy Ascended Heroes purchased spot; each artwork is tracked separately.
+  // Also supports imported rows with punctuation or the two names reversed.
+  if (key.includes('forest') && key.includes('pink') && key.includes('pikachu')) {
+    return ['Forest Pikachu', 'Pink Pikachu']
   }
 
   // 30th Anniversary: the source spot is "Pikachu (SIR, EX)".
@@ -355,7 +362,7 @@ export default function BreakPage() {
       if (!choices.length || !entry.hit_name) return
       const saved = String(entry.hit_name)
         .split(' + ')
-        .map((item) => item.replace(/\s*\((Reverse Holo|EX|SR|IR|MAR|Gold|SIR|CLC)\)\s*$/i, '').trim())
+        .map((item) => item.replace(/\s*\((Reverse Holo|EX|SR|IR|MAR|Gold|SIR|CLC|HR)\)\s*$/i, '').trim())
       restoredSelections[entry.id] = saved.filter((item) => choices.includes(item))
     })
     setSelectedHitNames(restoredSelections)
@@ -384,7 +391,7 @@ export default function BreakPage() {
         // Tier is stored separately in hit_tier, so don't duplicate it in hit_name.
         if (availableChoices.length > 0) {
           return String(name)
-            .replace(/\s+(SIR|GOLD|MAR|IR|SR|CLC)$/i, '')
+            .replace(/\s+(SIR|GOLD|MAR|IR|SR|CLC|HR)$/i, '')
             .trim()
         }
         return name
@@ -513,7 +520,7 @@ export default function BreakPage() {
         : choices.length > 0
         ? chosenNames
             .map((name) => {
-              const cleanName = String(name).replace(/\s+(SIR|GOLD|MAR|IR|SR|CLC)$/i, '').trim()
+              const cleanName = String(name).replace(/\s+(SIR|GOLD|MAR|IR|SR|CLC|HR)$/i, '').trim()
               const isAllOtherEx = spotChoiceKey(entry.spot_name).startsWith('all other ex')
               if (isAllOtherEx || !correctedTier) return cleanName
               return `${cleanName} (${tierLabel(correctedTier)})`
@@ -1101,7 +1108,8 @@ export default function BreakPage() {
         .tier-mar { border-color: rgba(56,189,248,.42); }
         .tier-ir { border-color: rgba(251,113,133,.42); }
         .tier-sr { border-color: rgba(192,132,252,.42); }
-        .tier-ex { border-color: rgba(96,165,250,.42); }
+        .tier-hr { border-color: rgba(45,212,191,.65); box-shadow: 0 0 22px rgba(45,212,191,.16); }
+         .tier-ex { border-color: rgba(96,165,250,.42); }
 
         @media (max-width: 760px) {
           .admin-page { padding: 14px; }

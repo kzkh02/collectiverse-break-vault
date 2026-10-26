@@ -6,6 +6,15 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '../lib/supabase'
 import Link from 'next/link'
 
+
+// Manual pulls have no CSV entry or break; expose the same display fields.
+function manualToHit(row: any, collectorName = 'Collector') {
+  return { ...row, id: `manual-${row.id}`, is_hit: true, spot_name: row.hit_name,
+    collector_name: String(collectorName).toLowerCase(), break_name: row.break_number ? `${row.set_name} Break ${row.break_number}` : row.set_name,
+    stream_datetime: row.pulled_at, revealed_at: row.pulled_at,
+    featured_hit: false, manual_hit: true }
+}
+
 function getTierClass(tier: string | null) {
   switch (String(tier || '').toLowerCase().trim()) {
     case 'clc': return 'hit-clc'
@@ -103,8 +112,14 @@ function updatedClcName(value: string, tier?: string | null) {
   return value
 }
 
+// Legacy Ascended Heroes entries used 'Elektross' instead of 'Eelektross'.
+// Correct display and artwork lookup without changing saved database records.
+function correctLegacyCardName(value: string) {
+  return String(value || '').replace(/\bElektross\b/gi, 'Eelektross')
+}
+
 function canonicalImageName(value: string) {
-  return String(value || '')
+  return correctLegacyCardName(value)
     .normalize('NFKD')
     .replace(/^[\p{Extended_Pictographic}\p{Emoji_Presentation}\uFE0F\u200D\s]+/gu, '')
     .replace(/\s*·?\s*Extra Hit\s*\d*$/i, '')
@@ -195,7 +210,7 @@ function baseCardName(value: string) {
 
 function cardVariantName(value: string, tier: string | null) {
   const labels: Record<string, string> = { sir: 'SIR', gold: 'GOLD', future: 'FUTURE', mar: 'MAR', ir: 'IR', sr: 'SR', ex: 'EX' }
-  const base = updatedClcName(baseCardName(value), tier)
+  const base = correctLegacyCardName(updatedClcName(baseCardName(value), tier))
   const label = labels[String(tier || '').toLowerCase()] || String(tier || '').replace(/_/g, ' ').toUpperCase()
   return tier ? `${base} ${label}`.trim() : base
 }
@@ -213,7 +228,7 @@ function visibleCardName(value: string, tier?: string | null) {
   // Venusaur EX + SIR badge -> Venusaur
   // Zapdos EX + EX badge -> Zapdos
   // The stored hit_name is NOT changed, so image matching remains intact.
-  return updatedClcName(cleaned.replace(/\s+EX$/i, '').trim(), tier)
+  return correctLegacyCardName(updatedClcName(cleaned.replace(/\s+EX$/i, '').trim(), tier))
 }
 
 function formatShortDate(value: string | null) {
@@ -8348,6 +8363,16 @@ export default function HomePage() {
   const [featuredHits, setFeaturedHits] = useState<any[]>([])
   const [featuredIndex, setFeaturedIndex] = useState(0)
   const [recentHits, setRecentHits] = useState<any[]>([])
+  const [homeHitsTab, setHomeHitsTab] = useState<'recent' | 'biggest'>('recent')
+  const [biggestTier, setBiggestTier] = useState('all')
+  const [biggestHits, setBiggestHits] = useState<any[]>([])
+  const [biggestLoading, setBiggestLoading] = useState(false)
+  const [biggestError, setBiggestError] = useState('')
+  const biggestRequestRef = useRef(0)
+  const biggestViewportRef = useRef<HTMLDivElement | null>(null)
+  const biggestTrackRef = useRef<HTMLDivElement | null>(null)
+  const biggestDragRef = useRef({ dragging: false, startX: 0, startScrollLeft: 0 })
+  const [biggestDragging, setBiggestDragging] = useState(false)
   const [hitImages, setHitImages] = useState<Record<string, string>>({})
   const recentViewportRef = useRef<HTMLDivElement | null>(null)
   const recentTrackRef = useRef<HTMLDivElement | null>(null)
@@ -8413,7 +8438,9 @@ export default function HomePage() {
         .limit(100),
     ])
 
-    const combined = [...(featuredData || []), ...(recentData || [])]
+    const { data: manualRecent } = await supabase.from('manual_hits')
+      .select('*').order('pulled_at', { ascending: false }).limit(100)
+    const combined = [...(featuredData || []), ...(recentData || []), ...(manualRecent || [])]
     const collectorIds = [...new Set(combined.map((entry: any) => entry.collector_id).filter(Boolean))]
     const breakIds = [...new Set(combined.map((entry: any) => entry.break_id).filter(Boolean))]
 
@@ -8433,7 +8460,7 @@ export default function HomePage() {
       const breakData: any = breaksById.get(String(entry.break_id))
       return {
         ...entry,
-        collector_name: collectorsById.get(String(entry.collector_id)) || 'Collector',
+        collector_name: String(collectorsById.get(String(entry.collector_id)) || 'Collector').toLowerCase(),
         break_name: breakData?.break_name || 'Collectiverse Break',
         stream_datetime: breakData?.stream_datetime || null,
       }
@@ -8443,9 +8470,12 @@ export default function HomePage() {
       .map(hydrate)
       .filter((hit: any) => !isGenericGroupedHit(hit))
 
-    const hydratedRecent = (recentData || [])
-      .map(hydrate)
-      .filter((hit: any) => !isGenericGroupedHit(hit))
+    const hydratedRecent = [
+      ...(recentData || []).map(hydrate),
+      ...(manualRecent || []).map((row: any) => manualToHit(row, collectorsById.get(String(row.collector_id)) || 'Collector'))
+    ].filter((hit: any) => !isGenericGroupedHit(hit))
+      .sort((a: any, b: any) => new Date(b.revealed_at || 0).getTime() - new Date(a.revealed_at || 0).getTime())
+      .slice(0, 100)
 
     const sortedRecentHits = [...hydratedRecent].sort((a: any, b: any) => {
       const aDate = a.stream_datetime ? new Date(a.stream_datetime) : null
@@ -8492,6 +8522,135 @@ export default function HomePage() {
     })
     setHitImages(imageMap)
   }
+
+  // Retrieve every premium hit in batches; never apply the recent 100-hit cap.
+  // Sorting happens after the complete result is available, so identical cards
+  // remain together even when the database has more than one page of hits.
+  async function loadBiggestHits(selectedTier: string, requestId: number) {
+    setBiggestLoading(true)
+    setBiggestError('')
+    const tiers = selectedTier === 'all'
+      ? ['sir', 'gold', 'future', 'fur', 'mar', 'clc']
+      : selectedTier === 'future' ? ['future', 'fur'] : [selectedTier]
+    try {
+      const entries: any[] = []
+      const batchSize = 500
+      for (let offset = 0; ; offset += batchSize) {
+        const { data, error } = await supabase.from('entries')
+          .select('*').eq('is_hit', true).in('hit_tier', tiers)
+          .order('id', { ascending: true })
+          .range(offset, offset + batchSize - 1)
+        if (error) throw error
+        if (requestId !== biggestRequestRef.current) return
+        entries.push(...(data || []))
+        if (!data || data.length < batchSize) break
+      }
+      for (let offset = 0; ; offset += batchSize) {
+        const { data, error } = await supabase.from('manual_hits')
+          .select('*').in('hit_tier', tiers).order('id').range(offset, offset + batchSize - 1)
+        if (error) throw error
+        entries.push(...(data || []).map((row: any) => manualToHit(row)))
+        if (!data || data.length < batchSize) break
+      }
+      const collectorIds = [...new Set(entries.map((x: any) => x.collector_id).filter(Boolean))]
+      const breakIds = [...new Set(entries.map((x: any) => x.break_id).filter(Boolean))]
+      const collectors: any[] = []
+      const breaks: any[] = []
+      // Chunk IN queries to avoid excessively large requests on long-running vaults.
+      for (let offset = 0; offset < collectorIds.length; offset += 150) {
+        const { data, error } = await supabase.from('collectors').select('id, whatnot_name')
+          .in('id', collectorIds.slice(offset, offset + 150))
+        if (error) throw error
+        collectors.push(...(data || []))
+      }
+      for (let offset = 0; offset < breakIds.length; offset += 150) {
+        const { data, error } = await supabase.from('breaks').select('id, break_name, stream_datetime')
+          .in('id', breakIds.slice(offset, offset + 150))
+        if (error) throw error
+        breaks.push(...(data || []))
+      }
+      const names = new Map(collectors.map((x: any) => [String(x.id), x.whatnot_name]))
+      const breakMap = new Map(breaks.map((x: any) => [String(x.id), x]))
+      const hydrated = entries.map((entry: any) => {
+        const b: any = breakMap.get(String(entry.break_id))
+        return { ...entry, collector_name: String(names.get(String(entry.collector_id)) || 'Collector').toLowerCase(),
+          break_name: entry.manual_hit ? (entry.break_name || (entry.break_number ? `${entry.set_name} Break ${entry.break_number}` : entry.set_name)) : (b?.break_name || 'Collectiverse Break'),
+          stream_datetime: entry.manual_hit ? entry.pulled_at : (b?.stream_datetime || null) }
+      }).filter((hit: any) => !isGenericGroupedHit(hit))
+      hydrated.sort((a: any, b: any) => {
+        const nameA = visibleCardName(a.hit_name || a.spot_name || '', a.hit_tier)
+        const nameB = visibleCardName(b.hit_name || b.spot_name || '', b.hit_tier)
+        return nameA.localeCompare(nameB, 'en', { sensitivity: 'base', numeric: true }) ||
+          String(a.hit_tier || '').localeCompare(String(b.hit_tier || '')) ||
+          String(a.id).localeCompare(String(b.id))
+      })
+      const setKeys = [...new Set(hydrated.map((hit: any) => normaliseImageKey(getBreakInfo(hit.break_name).setName)).filter(Boolean))]
+      const imageRows: any[] = []
+      for (let offset = 0; offset < setKeys.length; offset += 100) {
+        const { data, error } = await supabase.from('hit_images')
+          .select('set_name_normalized, hit_name_normalized, image_url')
+          .in('set_name_normalized', setKeys.slice(offset, offset + 100))
+        if (error) throw error
+        imageRows.push(...(data || []))
+      }
+      if (requestId !== biggestRequestRef.current) return
+      setHitImages((previous) => {
+        const updated = { ...previous }
+        imageRows.forEach((row: any) => { updated[`${row.set_name_normalized}::${row.hit_name_normalized}`] = String(row.image_url) })
+        return updated
+      })
+      setBiggestHits(hydrated)
+    } catch (error) {
+      if (requestId === biggestRequestRef.current) setBiggestError('Could not load premium hits. Please try again.')
+    } finally {
+      if (requestId === biggestRequestRef.current) setBiggestLoading(false)
+    }
+  }
+
+  function selectBiggestTier(value: string) {
+    biggestRequestRef.current += 1
+    setBiggestTier(value)
+    setBiggestHits([])
+    void loadBiggestHits(value, biggestRequestRef.current)
+  }
+
+  function selectHomeHitsTab(value: 'recent' | 'biggest') {
+    setHomeHitsTab(value)
+    if (value === 'biggest' && biggestHits.length === 0 && !biggestLoading) {
+      biggestRequestRef.current += 1
+      void loadBiggestHits(biggestTier, biggestRequestRef.current)
+    }
+  }
+
+  function keepBiggestCarouselInfinite() {
+    const viewport = biggestViewportRef.current
+    const track = biggestTrackRef.current
+    if (!viewport || !track || biggestHits.length === 0) return
+    const width = track.scrollWidth / 3
+    if (!width) return
+    if (viewport.scrollLeft < width * 0.5) viewport.scrollLeft += width
+    else if (viewport.scrollLeft > width * 1.5) viewport.scrollLeft -= width
+  }
+
+  useEffect(() => {
+    if (homeHitsTab !== 'biggest' || biggestHits.length === 0) return
+    const viewport = biggestViewportRef.current
+    const track = biggestTrackRef.current
+    if (!viewport || !track) return
+    const frame = window.requestAnimationFrame(() => { viewport.scrollLeft = track.scrollWidth / 3 })
+    return () => window.cancelAnimationFrame(frame)
+  }, [homeHitsTab, biggestHits])
+
+  useEffect(() => {
+    if (homeHitsTab !== 'biggest' || biggestHits.length === 0) return
+    const autoplay = window.setInterval(() => {
+      const viewport = biggestViewportRef.current
+      if (!viewport || biggestDragRef.current.dragging) return
+      viewport.scrollLeft += 1
+      keepBiggestCarouselInfinite()
+    }, 24)
+    return () => window.clearInterval(autoplay)
+  }, [homeHitsTab, biggestHits])
 
   function imageForHit(hit: any) {
     if (!hit) return ''
@@ -8765,6 +8924,17 @@ export default function HomePage() {
         .featured-set { font-size:.72rem; font-weight:950; letter-spacing:1.5px; text-transform:uppercase; opacity:.82; margin-bottom:5px; }
         .featured-break-number { display:inline-block; margin-bottom:8px; padding:4px 8px; border-radius:999px; border:1px solid rgba(255,255,255,.18); background:rgba(0,0,0,.22); font-size:.62rem; font-weight:950; letter-spacing:1.1px; }
 
+
+        .vault-hits-tabs, .vault-rarity-tabs { display:flex; flex-wrap:wrap; gap:8px; margin:12px 2px; }
+        .vault-hits-tabs button, .vault-rarity-tabs button, .vault-biggest-actions button { cursor:pointer; border:1px solid rgba(20,30,90,.22); border-radius:10px; padding:9px 16px; background:#fffaf0; color:#111950; font-weight:850; }
+        .vault-hits-tabs button.active, .vault-rarity-tabs button.active, .vault-biggest-actions button { background:#172268; color:white; border-color:#172268; }
+        .vault-biggest-content { width:100%; padding-bottom:18px; }
+        .vault-biggest-grid { display:flex; width:max-content; gap:12px; padding:0 12px; }
+        .vault-biggest-grid .recent-card { flex:0 0 auto; box-sizing:border-box; }
+        .vault-biggest-grid .recent-image { max-width:100%; }
+        .vault-biggest-actions { display:flex; justify-content:center; padding:20px; }
+        .vault-biggest-status { text-align:center; padding:18px; color:#172268; }
+        @media(max-width:520px) { .vault-rarity-tabs button { padding:8px 11px; } }
         .recent-section { margin: 14px 0 12px; text-align:left; }
         .recent-heading { display:flex; align-items:end; justify-content:space-between; gap:12px; margin:0 2px 9px; }
         .recent-title { font-size:.9rem; font-weight:950; letter-spacing:1.4px; text-transform:uppercase; }
@@ -10659,16 +10829,76 @@ export default function HomePage() {
           </Link>
         </section>
 
-        {recentHits.length > 0 && (
+        {(recentHits.length > 0 || homeHitsTab === 'biggest') && (
           <section className="recent-section">
             <div className="recent-heading">
               <div>
-                <div className="recent-title">Recently Added to the Vault</div>
-                <div className="recent-subtitle">Recently pulled on Collectiverse streams</div>
+                <div className="recent-title">{homeHitsTab === 'recent' ? 'Recently Added to the Vault' : 'Biggest Hits in the Vault'}</div>
+                <div className="recent-subtitle">{homeHitsTab === 'recent' ? 'Recently pulled on Collectiverse streams' : 'Every premium hit, across all recorded breaks'}</div>
               </div>
             </div>
 
+            <div className="vault-hits-tabs" role="tablist" aria-label="Vault hits view">
+              <button type="button" role="tab" aria-selected={homeHitsTab === 'recent'} className={homeHitsTab === 'recent' ? 'active' : ''} onClick={() => selectHomeHitsTab('recent')}>Recent Pulls</button>
+              <button type="button" role="tab" aria-selected={homeHitsTab === 'biggest'} className={homeHitsTab === 'biggest' ? 'active' : ''} onClick={() => selectHomeHitsTab('biggest')}>🏆 Biggest Hits</button>
+            </div>
+            {homeHitsTab === 'biggest' && (
+              <div className="vault-biggest-content">
+                <div className="vault-rarity-tabs" aria-label="Filter biggest hits by rarity">
+                  {['all', 'sir', 'gold', 'mar', 'clc'].map((value) => (
+                    <button type="button" key={value} aria-pressed={biggestTier === value}
+                      className={biggestTier === value ? 'active' : ''} onClick={() => selectBiggestTier(value)}>
+                      {value === 'all' ? 'All Hits' : value.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+                <div ref={biggestViewportRef}
+                  className={`recent-viewport ${biggestDragging ? 'is-dragging' : ''}`}
+                  onScroll={keepBiggestCarouselInfinite}
+                  onPointerDown={(e) => {
+                    if (e.pointerType !== 'mouse' || e.button !== 0) return
+                    const viewport = biggestViewportRef.current
+                    if (!viewport) return
+                    biggestDragRef.current = { dragging: true, startX: e.clientX, startScrollLeft: viewport.scrollLeft }
+                    setBiggestDragging(true)
+                    viewport.setPointerCapture(e.pointerId)
+                  }}
+                  onPointerMove={(e) => {
+                    if (!biggestDragRef.current.dragging || !biggestViewportRef.current) return
+                    biggestViewportRef.current.scrollLeft = biggestDragRef.current.startScrollLeft - (e.clientX - biggestDragRef.current.startX)
+                  }}
+                  onPointerUp={(e) => {
+                    biggestDragRef.current.dragging = false
+                    setBiggestDragging(false)
+                    if (biggestViewportRef.current?.hasPointerCapture(e.pointerId)) biggestViewportRef.current.releasePointerCapture(e.pointerId)
+                  }}
+                  onPointerCancel={() => { biggestDragRef.current.dragging = false; setBiggestDragging(false) }}
+                >
+                <div ref={biggestTrackRef} className="vault-biggest-grid">
+                  {Array.from({ length: 3 }, () => Array.from({ length: biggestHits.length ? Math.max(1, Math.ceil(16 / biggestHits.length)) : 0 }, () => biggestHits).flat()).flat().map((hit: any, index: number) => {
+                    const info = getBreakInfo(hit.break_name, hit.stream_datetime)
+                    const imageUrl = imageForHit(hit)
+                    return (
+                      <div className="recent-card" key={`${hit.id}-${index}`}>
+                        <div className="recent-image-wrap">
+                          {imageUrl ? <><img className="recent-image" loading="lazy" src={imageUrl} alt={cardVariantName(hit.hit_name || hit.spot_name, hit.hit_tier)} /><span className="recent-image-tier">{getTierStyle(hit.hit_tier || null).label}</span></> : <div className="recent-placeholder">🎴</div>}
+                        </div>
+                        <div className="recent-name">{visibleCardName(hit.hit_name || hit.spot_name, hit.hit_tier)}</div>
+                        <div className="recent-owner">{hit.collector_name}</div>
+                        <div className="recent-meta"><span className="recent-set-name">{info.setName}</span>{info.breakNumber && <span className="recent-break-number">{' · Break '}{info.breakNumber}</span>}<br />{formatShortDate(hit.stream_datetime)}</div>
+                      </div>
+                    )
+                  })}
+                </div>
+                </div>
+                {biggestError && <p className="vault-biggest-status" role="alert">{biggestError}</p>}
+                {!biggestLoading && !biggestError && biggestHits.length === 0 && <p className="vault-biggest-status">No hits in this rarity yet.</p>}
+                {biggestLoading && <p className="vault-biggest-status">Loading all-time hits…</p>}
+                {biggestError && <div className="vault-biggest-actions"><button type="button" onClick={() => { biggestRequestRef.current += 1; void loadBiggestHits(biggestTier, biggestRequestRef.current) }}>Try Again</button></div>}
+              </div>
+            )}
             <div
+              style={{ display: homeHitsTab === 'recent' ? undefined : 'none' }}
               ref={recentViewportRef}
               className={`recent-viewport ${recentDragging ? 'is-dragging' : ''}`}
               onPointerDown={startRecentDrag}
